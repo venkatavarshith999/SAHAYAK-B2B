@@ -1,0 +1,651 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  RETAILER
+  WHOLESALER
+  MANUFACTURER
+  DISTRIBUTOR
+  SUPPLIER
+  LOGISTICS
+  WORKER
+  SUPER_ADMIN
+  VERIFICATION_ADMIN
+  FINANCE_ADMIN
+  OPERATIONS_ADMIN
+  SUPPORT_ADMIN
+  LOGISTICS_ADMIN
+  ANALYTICS_ADMIN
+}
+
+enum AccountStatus {
+  INCOMPLETE_PROFILE
+  PENDING_VERIFICATION
+  NEEDS_INFO
+  ON_HOLD
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum PortalType {
+  BUYER
+  SELLER
+  LOGISTICS
+}
+
+enum BusinessType {
+  RETAILER
+  WHOLESALER
+  MANUFACTURER
+  DISTRIBUTOR
+  SUPPLIER
+  LOGISTICS
+}
+
+enum WorkerRoleType {
+  BUSINESS_MANAGER
+  VERIFICATION_MANAGER
+  PROCUREMENT_MANAGER
+  SALES_EXECUTIVE
+  CUSTOMER_SUPPORT
+  INVENTORY_MANAGER
+  WAREHOUSE_STAFF
+  PACKAGING_STAFF
+  DISPATCH_STAFF
+  MANUFACTURING_SUPERVISOR
+  PRODUCTION_WORKER
+  QUALITY_CONTROL
+  ACCOUNTANT
+  LOGISTICS_COORDINATOR
+  DRIVER
+}
+
+enum BranchType {
+  HQ
+  BRANCH
+  STORE
+  FACTORY
+  WAREHOUSE
+  REGIONAL_OFFICE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+model User {
+  id                     String                   @id @default(uuid())
+  email                  String                   @unique
+  phone                  String?                  @unique
+  fullName               String
+  passwordHash           String?
+  role                   UserRole
+  status                 AccountStatus            @default(PENDING_VERIFICATION)
+  emailVerified          Boolean                  @default(false)
+  phoneVerified          Boolean                  @default(false)
+  mfaEnabled             Boolean                  @default(false)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  sessions               UserSession[]
+  oauthAccounts          OAuthAccount[]
+  businessProfile        BusinessProfile?
+  memberships            OrganizationMembership[]
+  sentInvitations        WorkerInvitation[]       @relation("InvitedBy")
+  loginHistory           LoginHistory[]
+  conversations          Conversation[]
+  aiUsages               AiUsage[]
+  notifications          Notification[]
+  auditLogs              AdminAuditLog[]          @relation("AdminActor")
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationToken EmailVerificationToken[]
+  assignedTasks          WorkerTask[]             @relation("TaskAssignee")
+  createdTasks           WorkerTask[]             @relation("TaskAssigner")
+  attendanceRecords      AttendanceRecord[]
+  leaveRequests          LeaveRequest[]           @relation("LeaveApplicant")
+  reviewedLeaves         LeaveRequest[]           @relation("LeaveReviewer")
+  purchaseRequests       PurchaseRequest[]
+  drivenVehicles         Vehicle[]                @relation("VehicleDriver")
+  drivenShipments        Shipment[]               @relation("ShipmentDriver")
+
+  @@index([role, status])
+}
+
+model Organization {
+  id                   String                   @id @default(uuid())
+  name                 String
+  portalType           PortalType
+  businessType         BusinessType
+  category             String
+  description          String?
+  gstin                String?                  @unique
+  pan                  String?
+  licenses             Json?
+  gstVerified          Boolean                  @default(false)
+  identityVerified     Boolean                  @default(false)
+  documentsVerified    Boolean                  @default(false)
+  verificationStatus   AccountStatus            @default(PENDING_VERIFICATION)
+  address              String
+  city                 String
+  district             String?
+  state                String
+  pinCode              String
+  operatingRegions     String?
+  productionCapacity   String?
+  vehicleTypes         String?
+  metadata             Json?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  memberships          OrganizationMembership[]
+  invitations          WorkerInvitation[]
+  branches             Branch[]
+  documents            VerificationDocument[]
+  workerTasks          WorkerTask[]
+  attendanceRecords    AttendanceRecord[]
+  leaveRequests        LeaveRequest[]
+  products             Product[]
+  productionOrders     ProductionOrder[]
+  savedSuppliers       SavedSupplier[]          @relation("BuyerSavedSuppliers")
+  savedByBuyers        SavedSupplier[]          @relation("SupplierSavedBy")
+  purchaseRequests     PurchaseRequest[]
+  vehicles             Vehicle[]
+  shipments            Shipment[]
+
+  @@index([portalType, businessType])
+  @@index([verificationStatus])
+}
+
+model Branch {
+  id             String                   @id @default(uuid())
+  organizationId String
+  name           String
+  type           BranchType               @default(HQ)
+  address        String
+  city           String
+  district       String?
+  state          String
+  pinCode        String
+  isPrimary      Boolean                  @default(false)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    OrganizationMembership[]
+  invitations    WorkerInvitation[]
+
+  @@index([organizationId])
+}
+
+model OrganizationMembership {
+  id               String          @id @default(uuid())
+  organizationId   String
+  userId           String
+  isOwner          Boolean         @default(false)
+  workerRole       WorkerRoleType?
+  employeeId       String?
+  department       String?
+  designation      String?
+  managerId        String?
+  branchId         String?
+  joiningDate      DateTime        @default(now())
+  employmentStatus String          @default("ACTIVE")
+  permissions      Json            @default("[]")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch           Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, workerRole])
+}
+
+model WorkerInvitation {
+  id             String           @id @default(uuid())
+  organizationId String
+  invitedById    String
+  email          String
+  fullName       String
+  employeeId     String?
+  department     String?
+  designation    String?
+  workerRole     WorkerRoleType
+  branchId       String?
+  permissions    Json             @default("[]")
+  codeHash       String           @unique
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  branch         Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([email])
+}
+
+model LoginHistory {
+  id            String   @id @default(uuid())
+  userId        String?
+  email         String
+  success       Boolean
+  method        String   @default("PASSWORD")
+  ipAddress     String?
+  userAgent     String?
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  userId            String
+  provider          String   @default("google")
+  providerAccountId String
+  email             String
+  linkedAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model UserSession {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model BusinessProfile {
+  id                 String                 @id @default(uuid())
+  userId             String                 @unique
+  organizationId     String?                @unique
+  businessName       String
+  businessType       BusinessType?
+  category           String
+  description        String?
+  gstin              String?                @unique
+  pan                String?
+  gstVerified        Boolean                @default(false)
+  address            String
+  city               String
+  district           String?
+  state              String
+  pinCode            String
+  productionCapacity String?
+  operatingRegions   String?
+  vehicleTypes       String?
+  metadata           Json?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verification BusinessVerification?
+}
+
+model BusinessVerification {
+  id                 String                 @id @default(uuid())
+  businessId         String                 @unique
+  status             AccountStatus          @default(PENDING_VERIFICATION)
+  reviewerId         String?
+  assignedReviewerId String?
+  reviewerNotes      String?
+  riskFlags          Json?
+  history            Json                   @default("[]")
+  reviewedAt         DateTime?
+  updatedAt          DateTime               @updatedAt
+
+  business  BusinessProfile        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  documents VerificationDocument[]
+}
+
+model VerificationDocument {
+  id             String                @id @default(uuid())
+  verificationId String?
+  organizationId String?
+  docType        String
+  fileName       String
+  storageKey     String
+  mimeType       String
+  sizeBytes      Int
+  expiryDate     DateTime?
+  uploadedAt     DateTime              @default(now())
+
+  verification BusinessVerification? @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  organization Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([verificationId])
+}
+
+model Conversation {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  roleScope UserRole
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  sender         String
+  content        String
+  feedback       String?
+  createdAt      DateTime     @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model AiUsage {
+  id               String   @id @default(uuid())
+  userId           String
+  organizationId   String?
+  model            String
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  latencyMs        Int?
+  success          Boolean  @default(true)
+  errorCode        String?
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  category  String   @default("SYSTEM")
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model AdminAuditLog {
+  id             String   @id @default(uuid())
+  actorId        String
+  organizationId String?
+  action         String
+  targetEntity   String
+  targetId       String
+  details        Json?
+  prevHash       String
+  entryHash      String   @unique
+  createdAt      DateTime @default(now())
+
+  actor User @relation("AdminActor", fields: [actorId], references: [id])
+
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Phase C: Workers Portal Models ────────────────────────────────────────────
+model WorkerTask {
+  id             String    @id @default(uuid())
+  organizationId String
+  branchId       String?
+  title          String
+  description    String?
+  category       String    @default("GENERAL")
+  priority       String    @default("MEDIUM")
+  status         String    @default("PENDING")
+  assignedToId   String
+  assignedById   String
+  dueDate        DateTime?
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: Cascade)
+  assignedBy   User         @relation("TaskAssigner", fields: [assignedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, assignedToId, status])
+  @@index([organizationId, status])
+}
+
+model AttendanceRecord {
+  id              String    @id @default(uuid())
+  organizationId  String
+  userId          String
+  date            String    // YYYY-MM-DD
+  checkInAt       DateTime
+  checkOutAt      DateTime?
+  workMinutes     Int       @default(0)
+  shift           String    @default("GENERAL")
+  locationConsent Boolean   @default(false)
+  locationNote    String?
+  status          String    @default("PRESENT")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, date])
+  @@index([organizationId, date])
+}
+
+model LeaveRequest {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  leaveType      String    @default("CASUAL")
+  startDate      String    // YYYY-MM-DD
+  endDate        String    // YYYY-MM-DD
+  days           Int       @default(1)
+  reason         String
+  status         String    @default("PENDING")
+  reviewedById   String?
+  reviewerNotes  String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("LeaveApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
+}
+
+// ── Phase C: Seller Portal Models (Wholesaler, Manufacturer, Distributor, Supplier) ──
+model Product {
+  id                String   @id @default(uuid())
+  organizationId    String
+  sku               String
+  name              String
+  category          String
+  brand             String?
+  description       String?
+  unit              String   @default("unit")
+  moq               Int      @default(1)
+  unitPrice         Float
+  bulkPrice         Float?
+  bulkMinQty        Int?
+  stockQty          Int      @default(0)
+  reservedQty       Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, isActive])
+  @@index([category, isActive])
+}
+
+model ProductionOrder {
+  id               String    @id @default(uuid())
+  organizationId   String
+  orderNumber      String
+  productName      String
+  targetQty        Int
+  completedQty     Int       @default(0)
+  stage            String    @default("PLANNED")
+  rawMaterialsNote String?
+  qcStatus         String    @default("PENDING")
+  dueDate          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, orderNumber])
+  @@index([organizationId, stage])
+}
+
+// ── Phase C: Buyer Portal Models ──────────────────────────────────────────────
+model SavedSupplier {
+  id            String   @id @default(uuid())
+  buyerOrgId    String
+  supplierOrgId String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  buyerOrg    Organization @relation("BuyerSavedSuppliers", fields: [buyerOrgId], references: [id], onDelete: Cascade)
+  supplierOrg Organization @relation("SupplierSavedBy", fields: [supplierOrgId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerOrgId, supplierOrgId])
+  @@index([buyerOrgId])
+}
+
+model PurchaseRequest {
+  id             String    @id @default(uuid())
+  organizationId String
+  requestedById  String
+  title          String
+  category       String
+  quantity       Int
+  unit           String    @default("units")
+  targetPrice    Float?
+  deliveryCity   String
+  requiredBy     DateTime?
+  status         String    @default("OPEN")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+// ── Phase C: Transport & Logistics Portal Models ──────────────────────────────
+model Vehicle {
+  id               String    @id @default(uuid())
+  organizationId   String
+  registrationNo   String
+  vehicleType      String
+  capacityKg       Int
+  insuranceExpiry  DateTime?
+  permitExpiry     DateTime?
+  status           String    @default("AVAILABLE")
+  assignedDriverId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedDriver User?        @relation("VehicleDriver", fields: [assignedDriverId], references: [id], onDelete: SetNull)
+  shipments      Shipment[]
+
+  @@unique([organizationId, registrationNo])
+  @@index([organizationId, status])
+}
+
+model Shipment {
+  id              String    @id @default(uuid())
+  organizationId  String
+  trackingCode    String    @unique
+  clientName      String
+  originCity      String
+  destinationCity String
+  weightKg        Float
+  quotedAmount    Float?
+  status          String    @default("CREATED")
+  vehicleId       String?
+  driverUserId    String?
+  pickupDate      DateTime?
+  deliveryDate    DateTime?
+  podNotes        String?
+  events          Json      @default("[]")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle?     @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driver       User?        @relation("ShipmentDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([driverUserId, status])
+}

@@ -1,0 +1,14 @@
+{
+  "name": "sahayak-b2b-frontend",
+  "version": "2.0.0",
+  "description": "SAHAYAK B2B — Premium AI-Powered B2B Trading Platform Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
