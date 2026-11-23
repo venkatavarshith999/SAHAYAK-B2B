@@ -452,8 +452,8 @@
 /* ── Toast Notification ── */
 #toast-container {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  top: 20px;
+  right: 20px;
   z-index: 9999;
   display: flex;
   flex-direction: column;

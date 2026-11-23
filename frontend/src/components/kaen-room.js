@@ -1,289 +1,232 @@
 /**
- * SAHAYAK B2B — KAEN Multi-Round Negotiation Room
- * Preserves the existing backend negotiation engine logic
+ * SAHAYAK B2B — Persistent KAEN Multi-Round Negotiation Center
+ * Backed by PostgreSQL (/api/kaen/sessions) and the preserved backend KAEN solver.
+ * Requires explicit dual-party confirmation before locking an immutable agreed-terms snapshot.
  */
 
 import { api, demoData } from '../api.js';
 import { store } from '../store.js';
 import { showToast } from './toast.js';
+import { esc, fmtDate } from '../utils/sanitize.js';
 
 export class KaenRoom {
   constructor(container) {
     this.container = container;
-    this.session = JSON.parse(JSON.stringify(demoData.kaenSession)); // Clone demo data
-    this.render();
+    this.sessions = [];
+    this.selectedId = window.__selectedKaenSessionId || null;
+    this.load();
   }
 
-  getStatusClass(status) {
-    return { ACCEPTED: 'badge-active', COUNTER_OFFER: 'badge-brand', ESCALATED_TO_HUMAN: 'badge-pending' }[status] || 'badge-muted';
+  async load() {
+    if (store.demoMode) {
+      this.renderDemo();
+      return;
+    }
+    this.container.innerHTML = `<div class="page-enter"><p style="color:var(--color-text-muted);">Loading KAEN negotiation sessions…</p></div>`;
+    try {
+      const { sessions = [] } = await api.getKaenSessions();
+      this.sessions = sessions;
+      if (!this.selectedId && sessions.length > 0) this.selectedId = sessions[0].id;
+      this.renderLive();
+    } catch (err) {
+      this.container.innerHTML = `<div class="alert alert-danger"><span>❌</span><div>${esc(err.message || 'Failed to load KAEN sessions.')}</div></div>`;
+    }
   }
 
-  getGapPct() {
-    const { buyerOffer, sellerAsk } = this.session;
-    return sellerAsk > 0 ? Math.round(((sellerAsk - buyerOffer) / sellerAsk) * 100) : 0;
-  }
+  renderLive() {
+    const active = this.sessions.find((s) => s.id === this.selectedId) || this.sessions[0] || null;
+    if (active) this.selectedId = active.id;
 
-  progressWidth() {
-    return Math.min((this.session.round / this.session.maxRounds) * 100, 100);
-  }
+    window.__selectKaenSession = (id) => {
+      this.selectedId = id;
+      window.__selectedKaenSessionId = id;
+      this.renderLive();
+    };
 
-  render() {
-    const s = this.session;
-    const gap = this.getGapPct();
-    const totalBuyer = (s.buyerOffer * s.quantity).toLocaleString('en-IN');
-    const totalSeller = (s.sellerAsk * s.quantity).toLocaleString('en-IN');
-    const potentialSaving = ((s.sellerAsk - s.buyerOffer) * s.quantity).toLocaleString('en-IN');
+    window.__kaenSendOffer = async (e, id) => {
+      e.preventDefault();
+      try {
+        const payload = {
+          proposedPrice: Number(document.getElementById('kn-price')?.value),
+          proposedQty: Number(document.getElementById('kn-qty')?.value),
+          deliveryTerms: document.getElementById('kn-del')?.value.trim() || '',
+          paymentTerms: document.getElementById('kn-pay')?.value.trim() || '',
+          message: document.getElementById('kn-msg')?.value.trim() || ''
+        };
+        const floorInput = document.getElementById('kn-floor');
+        if (floorInput?.value) payload.sellerFloorPrice = Number(floorInput.value);
+
+        await api.submitKaenOffer(id, payload);
+        showToast('Counteroffer evaluated by KAEN & recorded!', 'success');
+        await this.load();
+      } catch (err) { showToast(err.message || 'Offer submission failed.', 'error'); }
+    };
+
+    window.__kaenConfirm = async (id) => {
+      try {
+        const res = await api.confirmKaenSession(id);
+        showToast(res.session?.status === 'AGREED' ? '🎉 Both parties confirmed! Terms locked.' : 'Your confirmation recorded. Waiting for counterparty.', 'success');
+        await this.load();
+      } catch (err) { showToast(err.message, 'error'); }
+    };
+
+    window.__kaenCancel = async (id) => {
+      if (!window.confirm('Cancel this negotiation session?')) return;
+      try { await api.cancelKaenSession(id); showToast('Negotiation cancelled.', 'info'); await this.load(); }
+      catch (err) { showToast(err.message, 'error'); }
+    };
+
+    window.__kaenCreateOrder = async (id) => {
+      try {
+        const res = await api.createOrderFromNegotiation(id);
+        showToast(`Order ${res.order?.orderNumber} created from agreed KAEN terms!`, 'success');
+        window.__sidebarNav?.('orders');
+      } catch (err) { showToast(err.message, 'error'); }
+    };
 
     this.container.innerHTML = `
-      <div style="max-width:900px;" class="animate-fadeInUp">
-        <!-- Header -->
-        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
-          <div>
-            <h1 style="font-size:var(--text-2xl);font-weight:800;letter-spacing:-0.02em;">
-              🤝 KAEN Negotiation Room
-            </h1>
-            <p style="color:var(--color-text-muted);font-size:var(--text-sm);">
-              AI-Powered Multi-Round Price Negotiation Engine
+      <div class="animate-fadeInUp" style="display:flex;flex-direction:column;gap:20px;">
+        <div class="page-header">
+          <h1>🤝 KAEN Persistent Negotiation Center</h1>
+          <p>Multi-round B2B price, quantity, delivery & payment-term bargaining powered by KAEN. Both parties must explicitly confirm final terms.</p>
+        </div>
+
+        ${!this.sessions.length ? `
+          <div class="card-soft p-8 text-center">
+            <div style="font-size:44px;margin-bottom:10px;">🤝</div>
+            <h3 style="font-weight:800;margin-bottom:6px;">No Active KAEN Negotiations Yet</h3>
+            <p style="color:var(--color-text-muted);font-size:var(--text-sm);max-width:460px;margin:0 auto 16px;">
+              Start a persistent KAEN negotiation from any submitted quotation under <strong>RFQs & Quotes</strong>.
             </p>
+            <button class="btn btn-primary btn-sm" onclick="window.__sidebarNav('rfq')">Go to RFQs & Quotations →</button>
           </div>
-          <span class="badge badge-brand" style="font-size:var(--text-sm);padding:6px 16px;">
-            Round ${s.round} / ${s.maxRounds}
-          </span>
-        </div>
-
-        <!-- Product Info -->
-        <div class="card-soft p-5 mb-4">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-            <div>
-              <div class="metric-label">Negotiating For</div>
-              <div style="font-weight:700;font-size:var(--text-base);margin-top:4px;">${s.product}</div>
+        ` : `
+          <div style="display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;">
+            <!-- Sessions Sidebar -->
+            <div class="card-soft p-4" style="display:flex;flex-direction:column;gap:8px;">
+              <div style="font-size:var(--text-xs);font-weight:800;color:var(--color-text-muted);text-transform:uppercase;">Sessions (${this.sessions.length})</div>
+              ${this.sessions.map((s) => `
+                <button onclick="window.__selectKaenSession('${esc(s.id)}')" style="text-align:left;padding:12px;border-radius:var(--radius-md);border:1px solid ${active?.id === s.id ? 'var(--color-primary)' : 'var(--color-border)'};background:${active?.id === s.id ? 'var(--color-brand-50,#f5f3ff)' : '#fff'};cursor:pointer;">
+                  <div style="font-weight:700;font-size:var(--text-sm);">${esc(s.productName)}</div>
+                  <div style="font-size:11px;color:var(--color-text-muted);">${esc(s.mySide === 'BUYER' ? s.sellerOrg?.name : s.buyerOrg?.name)}</div>
+                  <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;">
+                    <span class="badge ${s.status === 'AGREED' ? 'badge-active' : s.status === 'CANCELLED' ? 'badge-rejected' : 'badge-brand'}" style="font-size:10px;">${esc(s.status)}</span>
+                    <span style="font-size:11px;color:var(--color-text-muted);">R${esc(s.round)}/${esc(s.maxRounds)}</span>
+                  </div>
+                </button>`).join('')}
             </div>
-            <div style="display:flex;gap:24px;flex-wrap:wrap;">
-              <div style="text-align:center;">
-                <div class="metric-label">Quantity</div>
-                <div style="font-weight:800;font-size:var(--text-xl);">${s.quantity.toLocaleString()}</div>
-                <div style="font-size:var(--text-xs);color:var(--color-text-muted);">Units</div>
-              </div>
-              <div style="text-align:center;">
-                <div class="metric-label">Price Gap</div>
-                <div style="font-weight:800;font-size:var(--text-xl);color:var(--color-warning);">${gap}%</div>
-                <div style="font-size:var(--text-xs);color:var(--color-text-muted);">to close</div>
-              </div>
-              <div style="text-align:center;">
-                <div class="metric-label">Potential Saving</div>
-                <div style="font-weight:800;font-size:var(--text-xl);color:var(--color-success);">₹${potentialSaving}</div>
-                <div style="font-size:var(--text-xs);color:var(--color-text-muted);">if accepted</div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Progress -->
-          <div style="margin-top:16px;">
-            <div style="display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:8px;">
-              <span>Round Progress</span>
-              <span>${s.round}/${s.maxRounds} rounds used</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width:${this.progressWidth()}%"></div>
-            </div>
+            <!-- Active Session Workspace -->
+            ${active ? this.renderSessionDetail(active) : ''}
           </div>
-        </div>
+        `}
+      </div>`;
+  }
 
-        <!-- Current Offers -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-          <div class="card" style="border:2px solid var(--color-brand-200);background:var(--color-brand-50);">
-            <div class="metric-label" style="color:var(--color-primary);">Your Offer (Buyer)</div>
-            <div class="metric-value brand" style="font-size:var(--text-4xl);">₹${s.buyerOffer}</div>
-            <div style="font-size:var(--text-xs);color:var(--color-text-muted);">per unit • Total ₹${totalBuyer}</div>
-          </div>
-          <div class="card" style="border:2px solid #FDE68A;background:#FFFBEB;">
-            <div class="metric-label" style="color:var(--color-warning);">Seller Ask</div>
-            <div class="metric-value" style="color:var(--color-warning);font-size:var(--text-4xl);">₹${s.sellerAsk}</div>
-            <div style="font-size:var(--text-xs);color:var(--color-text-muted);">per unit • Total ₹${totalSeller}</div>
-          </div>
-        </div>
+  renderSessionDetail(s) {
+    const isBuyer = s.mySide === 'BUYER';
+    const closed = ['AGREED', 'CANCELLED', 'EXPIRED'].includes(s.status);
+    const myConfirmed = isBuyer ? s.buyerConfirmed : s.sellerConfirmed;
 
-        <!-- Submit Counter Offer -->
-        <div class="card-soft p-6 mb-4">
-          <h3 style="font-weight:700;margin-bottom:16px;">Submit Counter-Offer (Round ${s.round + 1})</h3>
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-            <div style="flex:1;min-width:200px;">
-              <label class="form-label">Your Counter Price (₹/unit)</label>
-              <div class="input-group">
-                <span class="input-icon" style="left:14px;">₹</span>
-                <input
-                  id="kaen-offer-input"
-                  type="number"
-                  class="input-field"
-                  style="padding-left:32px;"
-                  value="${Math.round((s.buyerOffer + s.sellerAsk) / 2)}"
-                  min="${s.buyerOffer}"
-                  max="${s.sellerAsk}"
-                  step="0.5"
-                />
-              </div>
-              <div class="form-hint">Range: ₹${s.buyerOffer} – ₹${s.sellerAsk}</div>
-            </div>
-            <button class="btn btn-primary btn-lg" onclick="window.__kaenSubmit()" style="white-space:nowrap;">
-              🤝 Submit KAEN Round ${s.round + 1}
-            </button>
-            ${s.round >= 2 ? `
-              <button class="btn btn-ghost" onclick="window.__kaenAccept()" style="border-color:var(--color-success);color:var(--color-success);">
-                ✅ Accept ₹${s.sellerAsk}
-              </button>
-            ` : ''}
-          </div>
-        </div>
-
-        <!-- Negotiation History -->
+    return `
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0;">
         <div class="card-soft p-6">
-          <h3 style="font-weight:700;margin-bottom:16px;">📊 Negotiation History</h3>
+          <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:10px;">
+            <div>
+              <span class="badge badge-brand">Round ${esc(s.round)} / ${esc(s.maxRounds)}</span>
+              <span class="badge ${s.status === 'AGREED' ? 'badge-active' : s.status === 'CANCELLED' ? 'badge-rejected' : 'badge-pending'}" style="margin-left:6px;">${esc(s.status.replace(/_/g, ' '))}</span>
+              <h2 style="font-size:var(--text-xl);font-weight:900;margin-top:8px;">${esc(s.productName)} (${esc(s.quantity)} ${esc(s.unit)})</h2>
+              <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">
+                Buyer: <strong>${esc(s.buyerOrg?.name)}</strong> · Seller: <strong>${esc(s.sellerOrg?.name)}</strong>
+                ${s.paymentTerms ? ` · Terms: ${esc(s.paymentTerms)}` : ''}
+              </div>
+            </div>
+            ${!closed ? `<button class="btn btn-danger btn-sm" onclick="window.__kaenCancel('${esc(s.id)}')">Cancel</button>` : ''}
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
+            <div style="padding:14px;border-radius:var(--radius-md);background:var(--color-brand-50,#f5f3ff);border:1px solid var(--color-brand-200,#ddd6fe);">
+              <div style="font-size:11px;font-weight:700;color:var(--color-primary);">BUYER OFFER</div>
+              <div style="font-size:var(--text-2xl);font-weight:900;color:var(--color-primary);">₹${esc(s.currentBuyerOffer)}/${esc(s.unit)}</div>
+              <div style="font-size:11px;color:var(--color-text-muted);">Buyer Confirmed: ${s.buyerConfirmed ? '✅ Yes' : '⏳ Pending'}</div>
+            </div>
+            <div style="padding:14px;border-radius:var(--radius-md);background:#fffbeb;border:1px solid #fde68a;">
+              <div style="font-size:11px;font-weight:700;color:var(--color-warning);">SELLER ASK (KAEN)</div>
+              <div style="font-size:var(--text-2xl);font-weight:900;color:var(--color-warning);">₹${esc(s.currentSellerAsk)}/${esc(s.unit)}</div>
+              <div style="font-size:11px;color:var(--color-text-muted);">Seller Confirmed: ${s.sellerConfirmed ? '✅ Yes' : '⏳ Pending'}${!isBuyer && s.sellerFloorPrice ? ` · Private Floor: ₹${esc(s.sellerFloorPrice)}` : ''}</div>
+            </div>
+          </div>
+
+          <!-- Dual-Party Confirmation / Immutable Snapshot -->
+          ${s.status === 'AGREED' && s.agreedTermsSnapshot ? `
+            <div class="alert alert-success" style="margin-top:16px;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div>
+                <strong>🔒 Immutable Commercial Terms Locked (${esc(fmtDate(s.agreedTermsSnapshot.lockedAt))}):</strong>
+                ₹${esc(s.agreedTermsSnapshot.agreedUnitPrice)}/${esc(s.agreedTermsSnapshot.unit)} × ${esc(s.agreedTermsSnapshot.quantity)} =
+                <strong>₹${Number(s.agreedTermsSnapshot.agreedTotalValue).toLocaleString('en-IN')}</strong> (before GST/delivery)
+              </div>
+              ${isBuyer ? `<button class="btn btn-primary btn-sm" onclick="window.__kaenCreateOrder('${esc(s.id)}')">🛒 Create Official Order →</button>` : ''}
+            </div>
+          ` : !closed ? `
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary btn-sm" onclick="window.__kaenConfirm('${esc(s.id)}')" ${myConfirmed ? 'disabled' : ''}>
+                ${myConfirmed ? '✓ You Confirmed — Awaiting Counterparty' : `✓ Confirm Terms at ₹${esc(s.agreedUnitPrice || s.currentSellerAsk)}/${esc(s.unit)}`}
+              </button>
+              <span style="font-size:11px;color:var(--color-text-muted);">Both buyer and seller must confirm explicitly; AI never auto-finalizes deals.</span>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Submit Counteroffer Form -->
+        ${!closed ? `
+          <div class="card-soft p-6">
+            <h3 style="font-weight:700;margin-bottom:12px;">Submit ${isBuyer ? 'Buyer Counteroffer' : 'Seller Counter-Ask'} (Round ${esc(s.round + 1)})</h3>
+            <form onsubmit="window.__kaenSendOffer(event, '${esc(s.id)}')" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
+              <div><label class="form-label">Proposed Price (₹/${esc(s.unit)}) *</label><input id="kn-price" type="number" step="0.01" min="1" class="input-field" value="${esc(Math.round((s.currentBuyerOffer + s.currentSellerAsk) / 2))}" required /></div>
+              <div><label class="form-label">Quantity *</label><input id="kn-qty" type="number" min="1" class="input-field" value="${esc(s.quantity)}" required /></div>
+              ${!isBuyer ? `<div><label class="form-label">Private Floor (₹)</label><input id="kn-floor" type="number" step="0.01" min="1" class="input-field" value="${esc(s.sellerFloorPrice || '')}" /></div>` : ''}
+              <div><label class="form-label">Delivery Terms</label><input id="kn-del" class="input-field" value="${esc(s.deliveryTerms || '')}" placeholder="Ex-works / Door delivery" /></div>
+              <div><label class="form-label">Payment Terms</label><input id="kn-pay" class="input-field" value="${esc(s.paymentTerms || 'Net 15 Days')}" /></div>
+              <div><label class="form-label">Note / Message</label><input id="kn-msg" class="input-field" placeholder="Optional counteroffer note" /></div>
+              <button type="submit" class="btn btn-primary">Submit Round →</button>
+            </form>
+          </div>
+        ` : ''}
+
+        <!-- Round History Table -->
+        <div class="card-soft p-6">
+          <h3 style="font-weight:700;margin-bottom:12px;">Negotiation Round History</h3>
           <div style="overflow-x:auto;">
             <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Round</th>
-                  <th>Buyer Offer</th>
-                  <th>Seller Counter</th>
-                  <th>Gap</th>
-                  <th>Status</th>
-                  <th>KAEN Note</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Round</th><th>Side</th><th>Proposed</th><th>Qty</th><th>KAEN Outcome</th><th>Rationale / Note</th><th>Time</th></tr></thead>
               <tbody>
-                ${s.history.map(h => {
-                  const roundGap = h.seller > 0 ? Math.round(((h.seller - h.buyer) / h.seller) * 100) : 0;
-                  return `
-                    <tr>
-                      <td><strong>Round ${h.round}</strong></td>
-                      <td>₹${h.buyer}/unit</td>
-                      <td>₹${h.seller}/unit</td>
-                      <td style="color:${roundGap < 5 ? 'var(--color-success)' : 'var(--color-warning)'};">${roundGap}%</td>
-                      <td><span class="badge ${this.getStatusClass(h.status)}">${h.status?.replace('_', ' ') || 'ACTIVE'}</span></td>
-                      <td style="color:var(--color-text-muted);font-size:var(--text-xs);">${h.note}</td>
-                    </tr>
-                  `;
-                }).join('')}
+                ${(s.rounds || []).map((r) => `
+                  <tr>
+                    <td><strong>#${esc(r.roundNumber)}</strong></td>
+                    <td><span class="badge badge-brand">${esc(r.actorSide)}</span></td>
+                    <td>₹${esc(r.proposedPrice)}</td>
+                    <td>${esc(r.proposedQty)}</td>
+                    <td><span class="badge badge-muted">${esc(r.kaenStatus || '—')}</span>${r.kaenCounterPrice ? ` → ₹${esc(r.kaenCounterPrice)}` : ''}</td>
+                    <td style="font-size:11px;color:var(--color-text-muted);">${esc(r.rationale || '')}${r.message ? ` · "${esc(r.message)}"` : ''}</td>
+                    <td style="font-size:11px;">${esc(fmtDate(r.createdAt))}</td>
+                  </tr>`).join('')}
               </tbody>
             </table>
           </div>
         </div>
-
-        <!-- KAEN Info -->
-        <div class="alert alert-info" style="margin-top:16px;">
-          <span>ℹ️</span>
-          <div>
-            <strong>About KAEN Engine:</strong> The KAEN (Kinetic Automated Exchange Negotiator) uses a concession-curve algorithm to calculate optimal counter-offers within seller floor price constraints. Each round moves toward an agreed price using a 1.35-power concession factor.
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Bind events
-    window.__kaenSubmit = () => this.submitRound();
-    window.__kaenAccept = () => this.acceptDeal();
+      </div>`;
   }
 
-  async submitRound() {
-    const input = document.getElementById('kaen-offer-input');
-    const buyerOffer = parseFloat(input?.value || 0);
-
-    if (!buyerOffer || buyerOffer < this.session.buyerOffer) {
-      showToast('Offer must be higher than your previous offer', 'warning');
-      return;
-    }
-
-    const btn = document.querySelector('[onclick="window.__kaenSubmit()"]');
-    if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
-
-    try {
-      // Call real KAEN backend engine
-      const result = await api.negotiate({
-        round: this.session.round + 1,
-        maxRounds: this.session.maxRounds,
-        buyerOffer,
-        buyerMaxPrice: this.session.buyerMax,
-        sellerAsk: this.session.sellerAsk,
-        sellerFloorPrice: this.session.sellerFloor,
-        quantity: this.session.quantity
-      });
-
-      this.session.round += 1;
-      this.session.buyerOffer = buyerOffer;
-
-      if (result.status === 'ACCEPTED') {
-        this.session.sellerAsk = buyerOffer;
-        this.session.history.push({
-          round: this.session.round,
-          buyer: buyerOffer,
-          seller: buyerOffer,
-          note: result.rationale,
-          status: 'ACCEPTED'
-        });
-        showToast(`🎉 Deal agreed at ₹${buyerOffer}/unit! Total: ₹${result.totalValue.toLocaleString('en-IN')}`, 'success', 6000);
-      } else if (result.status === 'ESCALATED_TO_HUMAN') {
-        this.session.history.push({
-          round: this.session.round,
-          buyer: buyerOffer,
-          seller: this.session.sellerAsk,
-          note: `Escalated — suggested midpoint: ₹${result.suggestedMidpoint}`,
-          status: 'ESCALATED_TO_HUMAN'
-        });
-        showToast(`⚠️ Negotiation escalated to manual review. Suggested: ₹${result.suggestedMidpoint}/unit`, 'warning', 6000);
-      } else {
-        this.session.sellerAsk = result.counterUnitPrice;
-        this.session.history.push({
-          round: this.session.round,
-          buyer: buyerOffer,
-          seller: result.counterUnitPrice,
-          note: result.rationale,
-          status: 'COUNTER_OFFER'
-        });
-        showToast(`Counter-offer: Seller moved to ₹${result.counterUnitPrice}/unit (↓${result.buyerDeltaPct}% gap)`, 'info');
-      }
-    } catch (err) {
-      if (store.demoMode || err.isServerDown) {
-        // Demo mode fallback ONLY when explicitly in demo mode or backend offline
-        this.applyLocalKaen(buyerOffer);
-      } else {
-        showToast(err.message || 'KAEN negotiation request rejected.', 'error', 5000);
-      }
-    }
-
-    if (btn) { btn.classList.remove('btn-loading'); btn.disabled = false; }
-    this.render();
-  }
-
-  applyLocalKaen(buyerOffer) {
-    const s = this.session;
-    s.round += 1;
-    s.buyerOffer = buyerOffer;
-    const progress = Math.min(s.round / s.maxRounds, 1);
-    const concessionFactor = Math.pow(progress, 1.35);
-    const nextSellerCounter = Math.round((s.sellerAsk - (s.sellerAsk - s.sellerFloor) * concessionFactor) * 100) / 100;
-
-    if (buyerOffer >= nextSellerCounter) {
-      s.sellerAsk = buyerOffer;
-      s.history.push({ round: s.round, buyer: buyerOffer, seller: buyerOffer, note: 'KAEN concession threshold met', status: 'ACCEPTED' });
-      showToast(`🎉 Deal agreed at ₹${buyerOffer}/unit!`, 'success', 6000);
-    } else {
-      s.sellerAsk = nextSellerCounter;
-      const gap = Math.round(((nextSellerCounter - buyerOffer) / buyerOffer) * 1000) / 10;
-      s.history.push({ round: s.round, buyer: buyerOffer, seller: nextSellerCounter, note: `KAEN Round ${s.round}/${s.maxRounds} concession`, status: 'COUNTER_OFFER' });
-      showToast(`Counter-offer: ₹${nextSellerCounter}/unit (${gap}% gap remaining)`, 'info');
-    }
-  }
-
-  acceptDeal() {
-    showToast(`✅ Deal accepted at ₹${this.session.sellerAsk}/unit! Total: ₹${(this.session.sellerAsk * this.session.quantity).toLocaleString('en-IN')}`, 'success', 6000);
-    this.session.buyerOffer = this.session.sellerAsk;
-    this.session.history.push({
-      round: this.session.round,
-      buyer: this.session.sellerAsk,
-      seller: this.session.sellerAsk,
-      note: 'Buyer accepted seller ask',
-      status: 'ACCEPTED'
-    });
-    this.render();
+  renderDemo() {
+    const s = demoData.kaenSession;
+    this.container.innerHTML = `
+      <div class="card-soft p-6">
+        <span class="badge badge-warning">Demo Mode Preview</span>
+        <h2 style="font-weight:800;margin-top:8px;">🤝 KAEN Negotiation Engine (Demo)</h2>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin-top:6px;">
+          Sign in with a verified business account to create persistent multi-round KAEN sessions backed by PostgreSQL.
+          Sample: ${esc(s.product)} — Buyer Offer ₹${esc(s.buyerOffer)} vs Seller Ask ₹${esc(s.sellerAsk)}.
+        </p>
+      </div>`;
   }
 }

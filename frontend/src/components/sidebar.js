@@ -13,6 +13,12 @@ function getSellerNav(businessType) {
       { id: 'overview', icon: '📊', label: isMfg ? 'Manufacturer Overview' : 'Seller Overview' },
       { id: 'kaen', icon: '🤝', label: 'KAEN Negotiation' }
     ]},
+    { label: 'Trade & Orders', items: [
+      { id: 'rfq', icon: '📋', label: 'Incoming RFQs & Quotes' },
+      { id: 'orders', icon: '🛒', label: 'Orders & Dispatch' },
+      { id: 'partnerships', icon: '🌐', label: 'Partnerships' },
+      { id: 'chat', icon: '💬', label: 'B2B Chat' }
+    ]},
     { label: isMfg ? 'Factory & Catalogue' : 'Catalogue & Stock', items: [
       { id: 'catalogue', icon: '📦', label: 'Product Catalogue' },
       ...(isMfg ? [{ id: 'production', icon: '🏭', label: 'Production & QC' }] : [])
@@ -34,8 +40,14 @@ const NAV_CONFIG = {
     { label: 'Procurement', items: [
       { id: 'suppliers', icon: '🏭', label: 'Supplier Discovery' },
       { id: 'catalogue', icon: '📦', label: 'Product Discovery' },
-      { id: 'requests', icon: '📋', label: 'Purchase Requests' },
+      { id: 'rfq', icon: '📋', label: 'RFQs & Quotes' },
+      { id: 'orders', icon: '🛒', label: 'Orders' },
+      { id: 'requests', icon: '📝', label: 'Purchase Requests' },
       { id: 'saved', icon: '⭐', label: 'Saved Suppliers' }
+    ]},
+    { label: 'Collaboration', items: [
+      { id: 'partnerships', icon: '🌐', label: 'Partnerships' },
+      { id: 'chat', icon: '💬', label: 'B2B Chat' }
     ]},
     { label: 'Organization', items: [
       { id: 'team', icon: '👷', label: 'Team & Workers' },
@@ -50,7 +62,9 @@ const NAV_CONFIG = {
     ]},
     { label: 'Operations', items: [
       { id: 'shipments', icon: '📦', label: 'Shipments & Tracking' },
-      { id: 'fleet', icon: '🚛', label: 'Fleet & Vehicles' }
+      { id: 'fleet', icon: '🚛', label: 'Fleet & Vehicles' },
+      { id: 'partnerships', icon: '🌐', label: 'Partnerships' },
+      { id: 'chat', icon: '💬', label: 'B2B Chat' }
     ]},
     { label: 'Organization', items: [
       { id: 'team', icon: '👷', label: 'Drivers & Team' },

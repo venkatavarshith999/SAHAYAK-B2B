@@ -161,6 +161,16 @@ model Organization {
   purchaseRequests     PurchaseRequest[]
   vehicles             Vehicle[]
   shipments            Shipment[]
+  sentPartnerships     PartnershipRequest[]     @relation("PartnershipRequester")
+  receivedPartnerships PartnershipRequest[]     @relation("PartnershipTarget")
+  buyerRfqs            Rfq[]                    @relation("BuyerRfqs")
+  sellerQuotations     Quotation[]              @relation("SellerQuotations")
+  buyerNegotiations    NegotiationSession[]     @relation("BuyerNegotiations")
+  sellerNegotiations   NegotiationSession[]     @relation("SellerNegotiations")
+  conversationsAsA     BusinessConversation[]   @relation("ConvOrgA")
+  conversationsAsB     BusinessConversation[]   @relation("ConvOrgB")
+  buyerOrders          Order[]                  @relation("BuyerOrders")
+  sellerOrders         Order[]                  @relation("SellerOrders")
 
   @@index([portalType, businessType])
   @@index([verificationStatus])
@@ -626,6 +636,7 @@ model Vehicle {
 model Shipment {
   id              String    @id @default(uuid())
   organizationId  String
+  orderId         String?
   trackingCode    String    @unique
   clientName      String
   originCity      String
@@ -645,7 +656,237 @@ model Shipment {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   vehicle      Vehicle?     @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   driver       User?        @relation("ShipmentDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
+  order        Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status])
   @@index([driverUserId, status])
+  @@index([orderId])
+}
+
+// ── Phase D Module 1: Business Partnerships ───────────────────────────────────
+model PartnershipRequest {
+  id                String    @id @default(uuid())
+  requesterOrgId    String
+  targetOrgId       String
+  relationshipType  String    // RETAILER_WHOLESALER | RETAILER_MANUFACTURER | WHOLESALER_MANUFACTURER | DISTRIBUTOR_MANUFACTURER | LOGISTICS_PARTNERSHIP
+  message           String?
+  commercialTerms   String?
+  status            String    @default("PENDING") // PENDING | INFO_REQUESTED | MANAGER_RECOMMENDED | ESCALATED_TO_OWNER | APPROVED | REJECTED | SUSPENDED
+  requestedInfoNote String?
+  reviewedById      String?
+  reviewerNotes     String?
+  decidedById       String?
+  decidedAt         DateTime?
+  history           Json      @default("[]")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  requesterOrg Organization @relation("PartnershipRequester", fields: [requesterOrgId], references: [id], onDelete: Cascade)
+  targetOrg    Organization @relation("PartnershipTarget", fields: [targetOrgId], references: [id], onDelete: Cascade)
+
+  @@index([requesterOrgId, status])
+  @@index([targetOrgId, status])
+}
+
+// ── Phase D Module 2: RFQs & Quotations ───────────────────────────────────────
+model Rfq {
+  id                 String    @id @default(uuid())
+  rfqNumber          String    @unique
+  buyerOrgId         String
+  createdById        String
+  title              String
+  productName        String
+  category           String
+  quantity           Int
+  unit               String    @default("units")
+  specifications     String?
+  targetMinPrice     Float?
+  targetMaxPrice     Float?
+  deliveryCity       String
+  requiredBy         DateTime?
+  paymentPreference  String?
+  targetSellerOrgIds Json      @default("[]") // Empty = broadcast to all active matching Sellers
+  status             String    @default("OPEN") // OPEN | QUOTED | NEGOTIATING | AWARDED | CLOSED | CANCELLED
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  buyerOrg     Organization         @relation("BuyerRfqs", fields: [buyerOrgId], references: [id], onDelete: Cascade)
+  quotations   Quotation[]
+  negotiations NegotiationSession[]
+  orders       Order[]
+
+  @@index([buyerOrgId, status])
+  @@index([category, status])
+}
+
+model Quotation {
+  id                    String    @id @default(uuid())
+  quoteNumber           String    @unique
+  rfqId                 String
+  sellerOrgId           String
+  submittedById         String
+  revision              Int       @default(1)
+  availableQty          Int
+  unitPrice             Float
+  bulkPrice             Float?
+  moq                   Int       @default(1)
+  taxRatePct            Float     @default(18)
+  deliveryCharge        Float     @default(0)
+  totalAmount           Float
+  estimatedDeliveryDays Int       @default(7)
+  paymentTerms          String    @default("Net 15 Days")
+  validUntil            DateTime?
+  conditions            String?
+  status                String    @default("SUBMITTED") // SUBMITTED | REVISED | NEGOTIATING | ACCEPTED | REJECTED | EXPIRED
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  rfq          Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  sellerOrg    Organization         @relation("SellerQuotations", fields: [sellerOrgId], references: [id], onDelete: Cascade)
+  negotiations NegotiationSession[]
+  orders       Order[]
+
+  @@index([rfqId, status])
+  @@index([sellerOrgId, status])
+}
+
+// ── Phase D Module 3: Persistent KAEN Negotiation ─────────────────────────────
+model NegotiationSession {
+  id                  String    @id @default(uuid())
+  rfqId               String?
+  quotationId         String?
+  buyerOrgId          String
+  sellerOrgId         String
+  productName         String
+  quantity            Int
+  unit                String    @default("units")
+  round               Int       @default(1)
+  maxRounds           Int       @default(5)
+  currentBuyerOffer   Float
+  currentSellerAsk    Float
+  sellerFloorPrice    Float
+  buyerMaxPrice       Float?
+  deliveryTerms       String?
+  paymentTerms        String?
+  status              String    @default("ACTIVE") // ACTIVE | AWAITING_CONFIRMATION | AGREED | ESCALATED_TO_HUMAN | CANCELLED | EXPIRED
+  buyerConfirmed      Boolean   @default(false)
+  sellerConfirmed     Boolean   @default(false)
+  agreedUnitPrice     Float?
+  agreedTotalValue    Float?
+  agreedTermsSnapshot Json?
+  expiresAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  buyerOrg  Organization       @relation("BuyerNegotiations", fields: [buyerOrgId], references: [id], onDelete: Cascade)
+  sellerOrg Organization       @relation("SellerNegotiations", fields: [sellerOrgId], references: [id], onDelete: Cascade)
+  rfq       Rfq?               @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+  quotation Quotation?         @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  rounds    NegotiationRound[]
+  orders    Order[]
+
+  @@index([buyerOrgId, status])
+  @@index([sellerOrgId, status])
+}
+
+model NegotiationRound {
+  id               String   @id @default(uuid())
+  sessionId        String
+  roundNumber      Int
+  actorOrgId       String
+  actorUserId      String
+  actorSide        String   // BUYER | SELLER | KAEN_ENGINE
+  proposedPrice    Float
+  proposedQty      Int
+  deliveryTerms    String?
+  paymentTerms     String?
+  kaenStatus       String?
+  kaenCounterPrice Float?
+  rationale        String?
+  message          String?
+  createdAt        DateTime @default(now())
+
+  session NegotiationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, roundNumber])
+}
+
+// ── Phase D Module 4: Shared B2B Chat ─────────────────────────────────────────
+model BusinessConversation {
+  id            String   @id @default(uuid())
+  orgAId        String
+  orgBId        String
+  subject       String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orgA     Organization      @relation("ConvOrgA", fields: [orgAId], references: [id], onDelete: Cascade)
+  orgB     Organization      @relation("ConvOrgB", fields: [orgBId], references: [id], onDelete: Cascade)
+  messages BusinessMessage[]
+
+  @@unique([orgAId, orgBId])
+  @@index([orgAId, lastMessageAt])
+  @@index([orgBId, lastMessageAt])
+}
+
+model BusinessMessage {
+  id                   String   @id @default(uuid())
+  conversationId       String
+  senderOrgId          String
+  senderUserId         String
+  senderName           String
+  body                 String
+  attachmentStorageKey String?
+  attachmentFileName   String?
+  attachmentMimeType   String?
+  refType              String?  // PRODUCT | RFQ | QUOTATION | NEGOTIATION | ORDER
+  refId                String?
+  refLabel             String?
+  readByOrgIds         Json     @default("[]")
+  createdAt            DateTime @default(now())
+
+  conversation BusinessConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// ── Phase D Module 5: B2B Orders ──────────────────────────────────────────────
+model Order {
+  id                   String    @id @default(uuid())
+  orderNumber          String    @unique
+  buyerOrgId           String
+  sellerOrgId          String
+  rfqId                String?
+  quotationId          String?
+  negotiationSessionId String?
+  productName          String
+  quantity             Int
+  unit                 String    @default("units")
+  unitPrice            Float
+  subtotal             Float
+  taxRatePct           Float     @default(18)
+  taxAmount            Float
+  deliveryCharge       Float     @default(0)
+  totalAmount          Float
+  deliveryCity         String
+  deliveryAddress      String?
+  paymentTerms         String    @default("Net 15 Days")
+  paymentStatus        String    @default("PENDING") // PENDING | PARTIAL | PAID | REFUNDED
+  status               String    @default("NEW") // NEW | CONFIRMED | PROCESSING | READY_FOR_DISPATCH | SHIPPED | DELIVERED | RECEIPT_CONFIRMED | CANCELLED
+  cancellationReason   String?
+  cancelledById        String?
+  timeline             Json      @default("[]")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  buyerOrg           Organization        @relation("BuyerOrders", fields: [buyerOrgId], references: [id], onDelete: Cascade)
+  sellerOrg          Organization        @relation("SellerOrders", fields: [sellerOrgId], references: [id], onDelete: Cascade)
+  rfq                Rfq?                @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+  quotation          Quotation?          @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  negotiationSession NegotiationSession? @relation(fields: [negotiationSessionId], references: [id], onDelete: SetNull)
+  shipments          Shipment[]
+
+  @@index([buyerOrgId, status])
+  @@index([sellerOrgId, status])
 }

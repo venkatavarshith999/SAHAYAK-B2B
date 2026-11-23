@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "test:phase-b": "node tests/phaseB.test.mjs",
     "test:phase-c": "node tests/phaseC.test.mjs",
+    "test:phase-d": "node tests/phaseD.test.mjs",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate"
   },

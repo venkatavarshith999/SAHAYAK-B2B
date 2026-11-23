@@ -8,6 +8,7 @@ import { store, setState, persistUser } from '../../store.js';
 import { api } from '../../api.js';
 import { renderSidebar } from '../../components/sidebar.js';
 import { AICopilot } from '../../components/ai-copilot.js';
+import { renderPartnershipsPanel } from '../../components/partnerships-panel.js';
 import { showToast } from '../../components/toast.js';
 import { navigate } from '../../router.js';
 import { esc, fmtDate } from '../../utils/sanitize.js';
@@ -176,6 +177,12 @@ async function roleWorkspaceTab() {
   const role = mem?.workerRole || 'STAFF';
   const perms = mem?.permissions || [];
   const blocks = [];
+
+  // Manager / Verification Manager Partnership Review Workspace
+  if (perms.includes('REVIEW_PARTNERSHIPS') || perms.includes('APPROVE_PARTNERSHIPS')) {
+    const pHtml = await renderPartnershipsPanel(() => renderTab('role-workspace')).catch(() => '');
+    if (pHtml) blocks.push(pHtml);
+  }
 
   // Manager controls: assign tasks, review team leaves, view team attendance
   if (perms.includes('ASSIGN_TASKS') || perms.includes('MANAGE_WORKERS') || perms.includes('APPROVE_LEAVE')) {

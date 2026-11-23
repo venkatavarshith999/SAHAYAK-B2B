@@ -260,6 +260,23 @@ router.patch('/shipments/:id', validateBody(updateShipmentSchema), async (req, r
   }
 
   const shipment = await prisma.shipment.update({ where: { id: existing.id }, data: updateData });
+
+  // Sync linked Order status & notify Buyer + Seller when Logistics ships or delivers!
+  if (existing.orderId && d.status && ['IN_TRANSIT', 'DELIVERED'].includes(d.status)) {
+    const linkedOrder = await prisma.order.findUnique({ where: { id: existing.orderId } });
+    if (linkedOrder && linkedOrder.status !== 'CANCELLED') {
+      const mappedOrderStatus = d.status === 'DELIVERED' ? 'DELIVERED' : 'SHIPPED';
+      const tl = Array.isArray(linkedOrder.timeline) ? linkedOrder.timeline : [];
+      await prisma.order.update({
+        where: { id: linkedOrder.id },
+        data: {
+          status: mappedOrderStatus,
+          timeline: [...tl, { status: mappedOrderStatus, by: req.user.email, at: new Date().toISOString(), note: `Logistics ${existing.trackingCode}: ${d.status}${d.podNotes ? ' — ' + d.podNotes : ''}` }]
+        }
+      });
+    }
+  }
+
   res.json({ shipment });
 });
 

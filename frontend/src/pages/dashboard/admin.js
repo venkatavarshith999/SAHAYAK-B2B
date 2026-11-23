@@ -95,6 +95,7 @@ async function getTabContent(tab) {
   if (tab === 'users') return usersTab();
   if (tab === 'verification') return verificationTab();
   if (tab === 'logistics-mgmt') return logisticsPartnersTab();
+  if (tab === 'transactions') return transactionsTab();
   if (tab === 'admin-mgmt') return adminMgmtTab();
   if (tab === 'ai-usage') return aiUsageTab();
   if (tab === 'audit') return auditTab();
@@ -342,6 +343,40 @@ async function logisticsPartnersTab() {
                 <td><strong>${esc(p._count?.shipments ?? 0)}</strong></td>
                 <td>${esc(p._count?.memberships ?? 0)}</td>
               </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);">No logistics partners registered yet.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function transactionsTab() {
+  if (store.demoMode) return `<div class="alert alert-info"><span>ℹ️</span><div>Live order transactions require backend connection.</div></div>`;
+  const [{ orders = [], summary = {} }, { partnerships = [] }] = await Promise.all([
+    api.getAdminOrders(),
+    api.getAdminPartnerships()
+  ]);
+  return `
+    <div class="animate-fadeInUp" style="display:flex;flex-direction:column;gap:20px;">
+      <div class="page-header"><h1>💳 Platform Orders & GMV Governance</h1><p>Live B2B orders recorded across organizations. GMV is tracked separately from collected platform commissions.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;">
+        ${metric('Total Orders', summary.totalOrders ?? 0, '🛒', 'brand', `${summary.completedOrders ?? 0} completed · ${summary.cancelledOrders ?? 0} cancelled`)}
+        ${metric('Gross Merchandise Value (₹)', summary.gmv ?? 0, '💰', 'success', 'GMV — not platform revenue')}
+        ${metric('B2B Partnerships', partnerships.length, '🤝', 'brand', `${partnerships.filter((p) => p.status === 'APPROVED').length} active`)}
+      </div>
+      <div class="card-soft p-0" style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr><th>Order #</th><th>Buyer → Seller</th><th>Product & Qty</th><th>Total (₹)</th><th>Status</th><th>Payment</th><th>Date</th></tr></thead>
+          <tbody>
+            ${orders.map((o) => `
+              <tr>
+                <td><code>${esc(o.orderNumber)}</code></td>
+                <td><strong>${esc(o.buyerOrg?.name)}</strong> → ${esc(o.sellerOrg?.name)}</td>
+                <td>${esc(o.productName)} × ${esc(o.quantity)} ${esc(o.unit)}</td>
+                <td><strong>₹${Number(o.totalAmount).toLocaleString('en-IN')}</strong></td>
+                <td><span class="badge ${o.status === 'CANCELLED' ? 'badge-rejected' : 'badge-brand'}">${esc(o.status)}</span></td>
+                <td><span class="badge ${o.paymentStatus === 'PAID' ? 'badge-active' : 'badge-pending'}">${esc(o.paymentStatus)}</span></td>
+                <td style="font-size:var(--text-xs);">${esc(fmtDate(o.createdAt))}</td>
+              </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);">No orders recorded yet.</td></tr>'}
           </tbody>
         </table>
       </div>

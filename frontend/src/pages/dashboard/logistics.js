@@ -13,6 +13,8 @@ import {
   renderTeamManagement,
   renderVerificationDocuments
 } from '../../components/org-management.js';
+import { renderPartnershipsPanel } from '../../components/partnerships-panel.js';
+import { renderB2bChatPanel, stopB2bChatPolling } from '../../components/b2b-chat.js';
 import { showToast } from '../../components/toast.js';
 import { navigate } from '../../router.js';
 import { esc } from '../../utils/sanitize.js';
@@ -28,6 +30,8 @@ const TITLES = {
   overview: 'Logistics Overview',
   shipments: 'Shipments & Tracking',
   fleet: 'Fleet & Vehicles',
+  partnerships: 'Logistics Partnerships',
+  chat: 'B2B Business Chat',
   team: 'Drivers & Workforce',
   branches: 'Company Profile & Branches',
   documents: 'Verification Documents'
@@ -86,6 +90,7 @@ async function renderTab(tab) {
   const t = document.getElementById('topbar-title');
   if (t) t.textContent = TITLES[tab] || 'Logistics Portal';
 
+  if (tab !== 'chat') stopB2bChatPolling();
   content.innerHTML = `<div class="page-enter"><p style="color:var(--color-text-muted);">Loading…</p></div>`;
   try {
     let html = '';
@@ -93,6 +98,8 @@ async function renderTab(tab) {
     if (tab === 'overview') html = await overviewTab();
     else if (tab === 'shipments') html = await shipmentsTab();
     else if (tab === 'fleet') html = await fleetTab();
+    else if (tab === 'partnerships') html = await renderPartnershipsPanel(refresh);
+    else if (tab === 'chat') html = await renderB2bChatPanel(refresh);
     else if (tab === 'team') html = await renderTeamManagement(refresh);
     else if (tab === 'branches') html = await renderOrgProfileAndBranches(refresh);
     else if (tab === 'documents') html = await renderVerificationDocuments(refresh);

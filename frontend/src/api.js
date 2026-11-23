@@ -343,6 +343,124 @@ export const api = {
     return request('PATCH', `/logistics/shipments/${id}`, payload);
   },
 
+  // ── Phase D: Partnerships ─────────────────────
+  async discoverPartners(params = {}) {
+    const q = new URLSearchParams(params).toString();
+    return request('GET', `/partnerships/discover${q ? '?' + q : ''}`);
+  },
+  async getPartnerships() {
+    return request('GET', '/partnerships');
+  },
+  async createPartnership(payload) {
+    return request('POST', '/partnerships', payload);
+  },
+  async reviewPartnership(id, action, notes = '') {
+    return request('PATCH', `/partnerships/${id}/review`, { action, notes });
+  },
+  async respondPartnership(id, response) {
+    return request('POST', `/partnerships/${id}/respond`, { response });
+  },
+
+  // ── Phase D: RFQs & Quotations ────────────────
+  async getRfqs(view = '') {
+    const q = view ? `?view=${encodeURIComponent(view)}` : '';
+    return request('GET', `/rfqs${q}`);
+  },
+  async createRfq(payload) {
+    return request('POST', '/rfqs', payload);
+  },
+  async cancelRfq(id) {
+    return request('PATCH', `/rfqs/${id}/cancel`);
+  },
+  async submitQuotation(rfqId, payload) {
+    return request('POST', `/rfqs/${rfqId}/quotations`, payload);
+  },
+  async reviseQuotation(quotationId, payload) {
+    return request('PATCH', `/rfqs/quotations/${quotationId}`, payload);
+  },
+  async acceptQuotation(quotationId) {
+    return request('POST', `/rfqs/quotations/${quotationId}/accept`);
+  },
+  async rejectQuotation(quotationId, reason = '') {
+    return request('POST', `/rfqs/quotations/${quotationId}/reject`, { reason });
+  },
+
+  // ── Phase D: Persistent KAEN Sessions ─────────
+  async getKaenSessions() {
+    return request('GET', '/kaen/sessions');
+  },
+  async startKaenSession(payload) {
+    return request('POST', '/kaen/sessions', payload);
+  },
+  async submitKaenOffer(sessionId, payload) {
+    return request('POST', `/kaen/sessions/${sessionId}/offer`, payload);
+  },
+  async confirmKaenSession(sessionId) {
+    return request('POST', `/kaen/sessions/${sessionId}/confirm`);
+  },
+  async cancelKaenSession(sessionId) {
+    return request('POST', `/kaen/sessions/${sessionId}/cancel`);
+  },
+
+  // ── Phase D: Shared B2B Chat ──────────────────
+  async getB2bConversations() {
+    return request('GET', '/chat/conversations');
+  },
+  async openB2bConversation(targetOrgId, subject = '') {
+    return request('POST', '/chat/conversations', { targetOrgId, subject });
+  },
+  async getB2bMessages(conversationId, search = '') {
+    const q = search ? `?search=${encodeURIComponent(search)}` : '';
+    return request('GET', `/chat/conversations/${conversationId}/messages${q}`);
+  },
+  async sendB2bMessage(conversationId, { body = '', file = null, refType = null, refId = null, refLabel = null }) {
+    if (file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (body) fd.append('body', body);
+      if (refType) fd.append('refType', refType);
+      if (refId) fd.append('refId', refId);
+      if (refLabel) fd.append('refLabel', refLabel);
+      const res = await fetch(`${BASE}/chat/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to send attachment (${res.status})`);
+      return data;
+    }
+    return request('POST', `/chat/conversations/${conversationId}/messages`, { body, refType, refId, refLabel });
+  },
+
+  // ── Phase D: Orders & Logistics Dispatch ──────
+  async getOrders() {
+    return request('GET', '/orders');
+  },
+  async createOrderFromQuotation(quotationId, deliveryAddress = '') {
+    return request('POST', `/orders/from-quotation/${quotationId}`, { deliveryAddress });
+  },
+  async createOrderFromNegotiation(sessionId, deliveryAddress = '') {
+    return request('POST', `/orders/from-negotiation/${sessionId}`, { deliveryAddress });
+  },
+  async updateOrderStatus(orderId, payload) {
+    return request('PATCH', `/orders/${orderId}/status`, payload);
+  },
+  async requestOrderShipment(orderId, payload) {
+    return request('POST', `/orders/${orderId}/request-shipment`, payload);
+  },
+  async getDispatchLogisticsPartners() {
+    return request('GET', '/orders/logistics-partners');
+  },
+
+  // ── Admin Live Orders & Partnerships ──────────
+  async getAdminOrders() {
+    return request('GET', '/admin/orders');
+  },
+  async getAdminPartnerships() {
+    return request('GET', '/admin/partnerships');
+  },
+
   async getBranches() {
     return request('GET', '/org/branches');
   },

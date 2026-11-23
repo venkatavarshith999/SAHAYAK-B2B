@@ -479,6 +479,48 @@ router.get('/logistics-partners', requirePermission('VIEW_ADMIN'), async (_req, 
   }
 });
 
+// ── Live Orders / Transactions & Partnerships Overview (Read-Only Governance) ─
+router.get('/orders', requirePermission('VIEW_ADMIN'), async (_req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        buyerOrg: { select: { id: true, name: true, city: true } },
+        sellerOrg: { select: { id: true, name: true, city: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    const gmv = orders.filter((o) => o.status !== 'CANCELLED').reduce((acc, o) => acc + o.totalAmount, 0);
+    res.json({
+      orders,
+      summary: {
+        totalOrders: orders.length,
+        completedOrders: orders.filter((o) => ['DELIVERED', 'RECEIPT_CONFIRMED'].includes(o.status)).length,
+        cancelledOrders: orders.filter((o) => o.status === 'CANCELLED').length,
+        gmv: Math.round(gmv * 100) / 100
+      }
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to load platform orders.' });
+  }
+});
+
+router.get('/partnerships', requirePermission('VIEW_ADMIN'), async (_req, res) => {
+  try {
+    const partnerships = await prisma.partnershipRequest.findMany({
+      include: {
+        requesterOrg: { select: { id: true, name: true, businessType: true, city: true } },
+        targetOrg: { select: { id: true, name: true, businessType: true, city: true } }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100
+    });
+    res.json({ partnerships });
+  } catch {
+    res.status(500).json({ error: 'Failed to load partnerships.' });
+  }
+});
+
 // ── Audit Logs ────────────────────────────────────────────────────────────────
 router.get('/audit-logs', requirePermission('VIEW_ADMIN'), async (req, res) => {
   try {

@@ -13,6 +13,10 @@ import {
   renderTeamManagement,
   renderVerificationDocuments
 } from '../../components/org-management.js';
+import { renderPartnershipsPanel } from '../../components/partnerships-panel.js';
+import { renderRfqPanel } from '../../components/rfq-panel.js';
+import { renderB2bChatPanel, stopB2bChatPolling } from '../../components/b2b-chat.js';
+import { renderOrdersPanel } from '../../components/orders-panel.js';
 import { showToast } from '../../components/toast.js';
 import { navigate } from '../../router.js';
 import { esc } from '../../utils/sanitize.js';
@@ -25,8 +29,12 @@ const TITLES = {
   overview: 'Buyer Dashboard',
   suppliers: 'Supplier Discovery',
   catalogue: 'Product Discovery',
+  rfq: 'RFQs & Quote Comparison',
+  orders: 'B2B Orders',
   requests: 'Purchase Requests',
   saved: 'Saved Suppliers',
+  partnerships: 'Business Partnerships',
+  chat: 'B2B Business Chat',
   kaen: 'KAEN Negotiation Room',
   team: 'Team & Workers',
   branches: 'Organization Profile & Branches',
@@ -86,6 +94,7 @@ async function renderTab(tab) {
   const t = document.getElementById('topbar-title');
   if (t) t.textContent = TITLES[tab] || 'Buyer Portal';
 
+  if (tab !== 'chat') stopB2bChatPolling();
   if (tab === 'kaen') {
     content.innerHTML = `<div class="page-enter"><div id="kaen-mount"></div></div>`;
     new KaenRoom(document.getElementById('kaen-mount'));
@@ -99,8 +108,12 @@ async function renderTab(tab) {
     if (tab === 'overview') html = await overviewTab();
     else if (tab === 'suppliers') html = await suppliersTab();
     else if (tab === 'catalogue') html = await catalogueTab();
+    else if (tab === 'rfq') html = await renderRfqPanel(refresh, { mode: 'buyer' });
+    else if (tab === 'orders') html = await renderOrdersPanel(refresh);
     else if (tab === 'requests') html = await requestsTab();
     else if (tab === 'saved') html = await savedTab();
+    else if (tab === 'partnerships') html = await renderPartnershipsPanel(refresh);
+    else if (tab === 'chat') html = await renderB2bChatPanel(refresh);
     else if (tab === 'team') html = await renderTeamManagement(refresh);
     else if (tab === 'branches') html = await renderOrgProfileAndBranches(refresh);
     else if (tab === 'documents') html = await renderVerificationDocuments(refresh);
