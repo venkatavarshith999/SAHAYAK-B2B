@@ -8,8 +8,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { writeAuditLog } from '../services/auditService.js';
 import {
   registerBusinessAccount,
+  registerGoogleBusinessAccount,
   joinAsInvitedWorker,
   handleGoogleIdToken,
+  verifyGoogleIdToken,
+  resolveGoogleIdentity,
+  linkGoogleAccount,
+  setPendingGoogleCookie,
+  clearPendingGoogleCookie,
+  verifyPendingGoogleToken,
   hashPassword,
   verifyPassword,
   createSession,
@@ -326,13 +333,61 @@ router.get('/login-history', requireAuth, async (req, res) => {
   }
 });
 
+const googleCompleteSchema = z.object({
+  fullName: z.string().min(2).max(120).optional(),
+  phone: z.string().min(7).max(20).optional().or(z.literal('')),
+  role: z.string().optional(),
+  businessType: z.string().optional(),
+  businessName: z.string().min(2).max(160),
+  category: z.string().min(2).max(100),
+  description: z.string().max(1000).optional().or(z.literal('')),
+  address: z.string().min(3).max(300),
+  city: z.string().min(2).max(80),
+  district: z.string().max(80).optional().or(z.literal('')),
+  state: z.string().min(2).max(80),
+  pinCode: z.string().min(4).max(12),
+  gstin: z.string().max(20).optional().or(z.literal('')),
+  pan: z.string().max(15).optional().or(z.literal('')),
+  operatingRegions: z.string().max(300).optional().or(z.literal('')),
+  productionCapacity: z.string().max(200).optional().or(z.literal('')),
+  vehicleTypes: z.string().max(200).optional().or(z.literal('')),
+  licenses: z.any().optional()
+});
+
+const googleLinkSchema = z.object({
+  password: z.string().min(1).max(128)
+});
+
+function timingSafeStateEqual(a, b) {
+  if (!a || !b || typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// ── Google OAuth: Public Configuration Status (never leaks credentials) ──────
+router.get('/google/status', (_req, res) => {
+  const configured = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    !String(process.env.GOOGLE_CLIENT_ID).includes('your-google')
+  );
+  res.json({
+    configured,
+    callbackPath: '/api/auth/google/callback'
+  });
+});
+
 // ── Google OAuth: Redirect (with HttpOnly State Cookie for CSRF) ──────────────
 router.get('/google/redirect', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
+  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 
-  if (!clientId) {
-    return res.status(503).json({ error: 'Google OAuth is not configured on this server.' });
+  if (!clientId || !clientSecret || clientId.includes('your-google')) {
+    return res.redirect(`${frontendOrigin}/#/login?error=google_not_configured`);
   }
 
   const state = crypto.randomBytes(24).toString('hex');
@@ -349,21 +404,26 @@ router.get('/google/redirect', (req, res) => {
     response_type: 'code',
     scope: 'openid email profile',
     state,
-    access_type: 'offline',
     prompt: 'select_account'
   });
 
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 });
 
-// ── Google OAuth: Callback (Validates State) ──────────────────────────────────
+// ── Google OAuth: Callback (Validates State & Exchanges Code Server-Side) ─────
 router.get('/google/callback', async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, error: oauthError } = req.query;
   const expectedState = req.cookies?.sahayak_oauth_state;
   const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
   res.clearCookie('sahayak_oauth_state');
 
-  if (!code || !state || !expectedState || state !== expectedState) {
+  if (oauthError) {
+    const codeKey = String(oauthError) === 'access_denied' ? 'google_cancelled' : 'google_failed';
+    return res.redirect(`${frontendOrigin}/#/login?error=${codeKey}`);
+  }
+
+  if (!code || !timingSafeStateEqual(String(state || ''), String(expectedState || ''))) {
     return res.redirect(`${frontendOrigin}/#/login?error=google_state_invalid`);
   }
 
@@ -373,35 +433,154 @@ router.get('/google/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code: String(code),
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code'
       })
     });
 
+    if (!tokenRes.ok) {
+      throw new Error(`Google token exchange failed (HTTP ${tokenRes.status}).`);
+    }
+
     const tokens = await tokenRes.json();
+    // Only id_token is verified for identity; access_token is intentionally never stored.
     if (!tokens.id_token) throw new Error('No ID token returned from Google.');
 
-    const result = await handleGoogleIdToken({ idToken: tokens.id_token });
+    const identity = await verifyGoogleIdToken(tokens.id_token);
+    const result = await resolveGoogleIdentity(identity);
+
     if (result.status === 'AUTHENTICATED') {
-      const rawToken = await createSession(result.user.id, req);
+      const user = result.user;
+      if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
+        await recordLoginAttempt({
+          userId: user.id,
+          email: user.email,
+          success: false,
+          method: 'GOOGLE',
+          req,
+          failureReason: `ACCOUNT_${user.status}`
+        });
+        return res.redirect(`${frontendOrigin}/#/login?error=account_suspended`);
+      }
+
+      const rawToken = await createSession(user.id, req);
       setSessionCookie(res, rawToken);
-      await recordLoginAttempt({ userId: result.user.id, email: result.user.email, success: true, method: 'GOOGLE', req });
+      clearPendingGoogleCookie(res);
+      await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE', req });
+
+      const pendingStatuses = new Set(['PENDING_VERIFICATION', 'INCOMPLETE_PROFILE', 'NEEDS_INFO', 'ON_HOLD']);
+      if (pendingStatuses.has(user.status)) {
+        return res.redirect(`${frontendOrigin}/#/pending`);
+      }
       return res.redirect(`${frontendOrigin}/#/dashboard`);
     }
-    if (result.status === 'ROLE_SELECTION_REQUIRED') {
-      const params = new URLSearchParams({
-        google: '1',
-        email: result.profile?.email || '',
-        name: result.profile?.fullName || ''
+
+    if (result.status === 'LINK_REQUIRED') {
+      setPendingGoogleCookie(res, {
+        mode: 'LINK',
+        sub: identity.sub,
+        email: identity.email,
+        fullName: result.profile?.fullName || identity.fullName
       });
-      return res.redirect(`${frontendOrigin}/#/role-select?${params.toString()}`);
+      return res.redirect(`${frontendOrigin}/#/login?linkGoogle=1`);
     }
-    return res.redirect(`${frontendOrigin}/#/login?error=account_link_required`);
+
+    // Brand-new Google user: store short-lived signed HttpOnly pending identity for role + business onboarding
+    setPendingGoogleCookie(res, {
+      mode: 'REGISTER',
+      sub: identity.sub,
+      email: identity.email,
+      fullName: identity.fullName
+    });
+    return res.redirect(`${frontendOrigin}/#/role-select?google=1`);
   } catch (err) {
     console.error('[Google OAuth Callback Error]', err.message);
     return res.redirect(`${frontendOrigin}/#/login?error=google_failed`);
+  }
+});
+
+// ── Google OAuth: Read Pending Signed Cookie (for Role Select / Link UI) ──────
+router.get('/google/pending', (req, res) => {
+  const pending = verifyPendingGoogleToken(req.cookies?.sahayak_google_pending);
+  if (!pending) {
+    return res.status(404).json({ error: 'No active Google sign-in session found. Please start Google sign-in again.' });
+  }
+  res.json({
+    mode: pending.mode,
+    email: pending.email,
+    fullName: pending.fullName
+  });
+});
+
+// ── Google OAuth: Clear Pending Cookie ────────────────────────────────────────
+router.post('/google/cancel', (_req, res) => {
+  clearPendingGoogleCookie(res);
+  res.json({ ok: true });
+});
+
+// ── Google OAuth: Link Existing Password Account Securely ─────────────────────
+router.post('/google/link', authLimiter, validateBody(googleLinkSchema), async (req, res) => {
+  try {
+    const pending = verifyPendingGoogleToken(req.cookies?.sahayak_google_pending);
+    if (!pending || pending.mode !== 'LINK') {
+      return res.status(401).json({ error: 'Google verification session expired. Please click Sign in with Google again.' });
+    }
+
+    const { user } = await linkGoogleAccount({
+      sub: pending.sub,
+      email: pending.email,
+      password: req.validatedBody.password
+    });
+
+    const rawToken = await createSession(user.id, req);
+    setSessionCookie(res, rawToken);
+    clearPendingGoogleCookie(res);
+    await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE_LINK', req });
+    await writeAuditLog({
+      actorId: user.id,
+      action: 'GOOGLE_ACCOUNT_LINKED',
+      targetType: 'User',
+      targetId: user.id,
+      metadata: { provider: 'google' }
+    });
+
+    res.json({ status: 'AUTHENTICATED', user: sanitizeUser(user) });
+  } catch (err) {
+    const status = err.statusCode || 400;
+    res.status(status).json({ error: err.message || 'Could not link Google account.' });
+  }
+});
+
+// ── Google OAuth: Complete New Business Registration ──────────────────────────
+router.post('/google/complete', authLimiter, validateBody(googleCompleteSchema), async (req, res) => {
+  try {
+    const pending = verifyPendingGoogleToken(req.cookies?.sahayak_google_pending);
+    if (!pending || pending.mode !== 'REGISTER') {
+      return res.status(401).json({ error: 'Google verification session expired. Please sign in with Google again.' });
+    }
+
+    const { user, org } = await registerGoogleBusinessAccount(
+      { sub: pending.sub, email: pending.email, fullName: pending.fullName },
+      req.validatedBody
+    );
+
+    const rawToken = await createSession(user.id, req);
+    setSessionCookie(res, rawToken);
+    clearPendingGoogleCookie(res);
+    await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE_REGISTER', req });
+    await writeAuditLog({
+      actorId: user.id,
+      action: 'BUSINESS_REGISTERED_GOOGLE',
+      targetType: 'Organization',
+      targetId: org.id,
+      metadata: { businessType: org.businessType, portalType: org.portalType }
+    });
+
+    res.status(201).json({ status: 'AUTHENTICATED', user: sanitizeUser(user) });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Google business registration failed.' });
   }
 });
 
@@ -414,6 +593,10 @@ router.post('/google', authLimiter, async (req, res) => {
     const result = await handleGoogleIdToken({ idToken, selectedRole, linkPassword });
     if (result.status !== 'AUTHENTICATED') {
       return res.status(200).json(result);
+    }
+
+    if (result.user.status === 'REJECTED' || result.user.status === 'SUSPENDED') {
+      return res.status(403).json({ error: `Your account is ${result.user.status.toLowerCase()}.` });
     }
 
     const rawToken = await createSession(result.user.id, req);

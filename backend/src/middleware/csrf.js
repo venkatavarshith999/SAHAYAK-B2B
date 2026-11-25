@@ -11,8 +11,13 @@ export function csrfOriginGuard(req, res, next) {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   const allowedOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  const extraOrigins = String(process.env.EXTRA_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const allowedOrigins = new Set([
     allowedOrigin,
+    ...extraOrigins,
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     `http://localhost:${process.env.PORT || 4000}`

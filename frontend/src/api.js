@@ -81,8 +81,28 @@ export const api = {
     return `${BASE}/auth/google/redirect`;
   },
 
-  async googleCallback(code, selectedRole) {
-    return request('POST', '/auth/google', { code, selectedRole });
+  async googleStatus() {
+    return request('GET', '/auth/google/status');
+  },
+
+  async googlePending() {
+    return request('GET', '/auth/google/pending');
+  },
+
+  async googleLink(password) {
+    return request('POST', '/auth/google/link', { password });
+  },
+
+  async googleComplete(payload) {
+    return request('POST', '/auth/google/complete', payload);
+  },
+
+  async googleCancel() {
+    return request('POST', '/auth/google/cancel');
+  },
+
+  async googleCallback(idToken, selectedRole, linkPassword) {
+    return request('POST', '/auth/google', { idToken, selectedRole, linkPassword });
   },
 
   // ── AI ────────────────────────────────────────

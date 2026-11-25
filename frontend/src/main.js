@@ -127,7 +127,7 @@ route('/worker-access', (_params, query) => {
   renderWorkerAccess(getApp(), query);
 });
 
-route('/register/:role', (params) => renderRegister(getApp(), params));
+route('/register/:role', (params, query) => renderRegister(getApp(), params, query));
 
 route('/pending', requireAuth(() => {
   renderPending(getApp());
@@ -184,20 +184,21 @@ async function init() {
   const restored = restoreUser();
   if (restored) {
     setState({ user: restored, sessionChecked: false });
-    try {
-      const me = await api.me();
-      setState({ user: me, sessionChecked: true, demoMode: false });
-      persistUser(me);
-    } catch (err) {
-      if (err.status === 401) {
-        persistUser(null);
-        setState({ user: null, sessionChecked: true, demoMode: false });
-      } else {
-        setState({ sessionChecked: true, demoMode: true });
-      }
+  }
+  try {
+    // Always verify HttpOnly session cookie on boot (essential after Google OAuth redirect)
+    const me = await api.me();
+    setState({ user: me, sessionChecked: true, demoMode: false });
+    persistUser(me);
+  } catch (err) {
+    if (err.status === 401) {
+      persistUser(null);
+      setState({ user: null, sessionChecked: true, demoMode: false });
+    } else if (restored) {
+      setState({ sessionChecked: true, demoMode: true });
+    } else {
+      setState({ sessionChecked: true });
     }
-  } else {
-    setState({ sessionChecked: true });
   }
   startRouter();
 }

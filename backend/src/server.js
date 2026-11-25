@@ -35,8 +35,19 @@ const app = express();
 
 // ── Security & Parsing Middleware ─────────────────────────────────────────────
 app.use(helmet());
+const corsAllowedOrigins = new Set([
+  process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  ...String(process.env.EXTRA_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+]);
+
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || corsAllowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '2mb' }));
