@@ -51,7 +51,7 @@ export function setPendingGoogleCookie(res, payload) {
   const signed = signPendingGoogleToken(payload);
   res.cookie('sahayak_google_pending', signed, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
     sameSite: 'lax',
     maxAge: 10 * 60 * 1000
   });
@@ -90,7 +90,7 @@ export function generateInviteCode() {
 export function setSessionCookie(res, rawToken) {
   res.cookie('sahayak_session', rawToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
     sameSite: 'lax',
     maxAge: Number(process.env.SESSION_TTL_HOURS || 24) * 3600 * 1000
   });

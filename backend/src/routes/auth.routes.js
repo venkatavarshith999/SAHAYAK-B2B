@@ -393,7 +393,7 @@ router.get('/google/redirect', (req, res) => {
   const state = crypto.randomBytes(24).toString('hex');
   res.cookie('sahayak_oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
     sameSite: 'lax',
     maxAge: 10 * 60 * 1000
   });
