@@ -1,341 +1,483 @@
-# 🚀 SAHAYAK B2B — AI-Powered B2B Trading Platform
+# 💜 SAHAYAK B2B — AI-Powered Business & Trade Marketplace
 
-> **Smart Business. Better Connections. Stronger Trade.**
+<div align="center">
 
-An intelligent B2B commerce platform connecting verified retailers, wholesalers, manufacturers, and logistics partners through AI-driven product discovery, autonomous price negotiation (KAEN Engine), and transparent trade intelligence.
+<img src="https://readme-typing-svg.demolab.com?font=Plus+Jakarta+Sans&weight=700&size=28&pause=1000&color=7C3AED&center=true&vCenter=true&width=800&lines=Smart+Business.+Better+Connections.;Discover+Suppliers.+Compare+Prices.;Negotiate+Smarter.+Trade+Better.;Powered+by+AI.+Built+for+Business." alt="SAHAYAK B2B animated heading" />
+
+### Connecting Buyers, Retailers, Wholesalers, Manufacturers & Logistics Partners
+
+**An intelligent B2B commerce platform designed to simplify business discovery, procurement, negotiation and trade management.**
+
+<br/>
+
+[![Live Website](https://img.shields.io/badge/🌐_Live_Website-Visit_Sahayak-7C3AED?style=for-the-badge)](https://sahayak-b2b.netlify.app/)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-16142C?style=for-the-badge&logo=github)](https://github.com/venkatavarshith999/SAHAYAK-B2B)
+
+<br/>
+
+![JavaScript](https://img.shields.io/badge/JavaScript-ES_Modules-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4-000000?style=flat-square&logo=express&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=flat-square&logo=prisma&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google_Gemini-AI-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-Deployment-00C7B7?style=flat-square&logo=netlify&logoColor=white)
+
+</div>
 
 ---
 
-## 📋 Table of Contents
+## ✨ About the Project
 
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Environment Setup](#environment-setup)
-- [Database Setup](#database-setup)
-- [Running the Application](#running-the-application)
-- [Role-Based Portals](#role-based-portals)
-- [Demo Mode](#demo-mode)
-- [API Reference](#api-reference)
-- [Google OAuth Setup](#google-oauth-setup)
-- [Gemini AI Setup](#gemini-ai-setup)
+**SAHAYAK B2B** is an AI-powered business and trade marketplace that connects different participants in the supply chain through a unified digital platform.
+
+The platform helps businesses discover suppliers, explore products, manage quotations, negotiate prices and coordinate business operations.
+
+It combines AI-powered market assistance with structured business workflows to make B2B procurement more accessible and efficient.
+
+### 🎯 Our Mission
+
+To simplify business transactions by connecting the right buyers and sellers through intelligent technology, transparent pricing and smarter negotiation.
 
 ---
 
-## Architecture
+## 🚀 Key Features
 
+<table>
+<tr>
+<td width="50%">
+
+### 🤖 AI Business Assistant
+
+- Gemini-powered business assistance.
+- Role-aware AI responses.
+- Business-related queries.
+- Market intelligence assistance.
+
+</td>
+<td width="50%">
+
+### 🤝 KAEN Negotiation Engine
+
+- Structured multi-round negotiation.
+- Automated concession curves.
+- Buyer-seller negotiation workflows.
+- Dual-party approval.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🏢 Business Management
+
+- Business registration.
+- Organization profiles.
+- Business verification.
+- Role-based access control.
+
+</td>
+<td width="50%">
+
+### 📦 Product & Procurement
+
+- Product catalogue management.
+- Buyer and seller connectivity.
+- RFQ management.
+- Quotations and orders.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🚚 Logistics Management
+
+- Logistics partner portal.
+- Shipment tracking workflows.
+- Delivery assignments.
+- Proof of delivery.
+
+</td>
+<td width="50%">
+
+### 🛡️ Security & Administration
+
+- Secure authentication.
+- Google OAuth.
+- Admin verification.
+- Audit logging.
+- Organization-level isolation.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 👥 Five Dedicated Portals
+
+| Portal | Purpose |
+|---|---|
+| 🛒 Retailer / Buyer | Discover suppliers, request quotations and negotiate |
+| 📦 Wholesaler / Seller | Manage products, enquiries and quotations |
+| 🏭 Manufacturer | Manage production capacity and bulk orders |
+| 🚚 Logistics Partner | Manage shipment and delivery workflows |
+| 🔐 Super Admin | Manage users, business verification and platform operations |
+
+Each portal provides role-specific functionality through a unified platform.
+
+---
+
+## 🧠 KAEN — Intelligent Negotiation Engine
+
+KAEN is the platform's structured negotiation engine.
+
+It supports multi-round bargaining through concession curves and negotiation workflows.
+
+**Negotiation Flow**
+
+1. Buyer initiates a negotiation.
+2. Seller reviews the proposed terms.
+3. KAEN evaluates the negotiation round.
+4. Both parties review the updated offer.
+5. The parties approve the final terms.
+
+**Goal:** Make bulk procurement negotiations more structured and transparent.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TB
+    A["SAHAYAK B2B Platform"]
+
+    A --> B["Frontend"]
+    A --> C["Backend"]
+
+    B --> D["Vite + Vanilla JavaScript"]
+
+    C --> E["Node.js + Express"]
+    E --> F["Prisma ORM"]
+    F --> G[("PostgreSQL")]
+
+    E --> H["Google Gemini AI"]
+    E --> I["KAEN Engine"]
+    E --> J["Authentication & RBAC"]
+
+    K["Netlify Deployment"] --> B
 ```
-sahayak-b2b/
-├── backend/                    # Express.js API server
-│   ├── src/
-│   │   ├── server.js           # Main API: Auth, RBAC, Admin, Notifications
-│   │   ├── auth/
-│   │   │   └── authService.js  # Argon2id hashing, Google OAuth, session tokens
-│   │   ├── ai/
-│   │   │   └── geminiProvider.js  # Gemini 2.5 Flash — role-aware B2B AI
-│   │   └── kaen/
-│   │       └── negotiationEngine.js  # KAEN automated negotiation engine
-│   └── prisma/
-│       └── schema.prisma       # PostgreSQL schema (Users, Sessions, Business Profiles, etc.)
+
+### Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Vite 5, Vanilla JavaScript |
+| Styling | Custom CSS Design System |
+| Backend | Node.js, Express.js |
+| Database | PostgreSQL |
+| ORM | Prisma |
+| AI Integration | Google Gemini 2.5 Flash |
+| Authentication | Argon2id, Google OAuth |
+| Sessions | HttpOnly Cookies |
+| Deployment | Netlify |
+
+---
+
+## 🎨 UI / UX Design
+
+SAHAYAK B2B follows a modern purple-and-white SaaS design system.
+
+**Brand Identity**
+
+- Primary Purple: `#7C3AED`
+- Deep Purple: `#6D28D9`
+- Soft Lavender: `#F5F3FF`
+- White: `#FFFFFF`
+- Background: `#F7F7FB`
+- Primary Text: `#16142C`
+
+**Design Elements**
+
+- Clean dashboard layouts.
+- Rounded cards and subtle shadows.
+- Responsive navigation.
+- Consistent typography.
+- Smooth page transitions.
+- Interactive hover effects.
+- Animated gradient backgrounds.
+
+### ✨ Motion & Micro-Interactions
+
+The frontend includes a dedicated animation stylesheet.
+
+- Fade-in page entrances.
+- Slide-up content transitions.
+- Floating dashboard elements.
+- Animated gradients.
+- Shimmer effects.
+- Smooth hover lift.
+- Interactive ripple effects.
+- Typing indicators.
+- Staggered card animations.
+
+The animation system is designed to make the interface feel responsive without distracting users from business workflows.
+
+---
+
+## 🔐 Security Architecture
+
+- Argon2id password hashing.
+- HttpOnly session cookies.
+- SHA-256 hashed session token storage.
+- Role-based access control (RBAC).
+- Organization-level access isolation.
+- Google OAuth verification.
+- API rate limiting.
+- CSRF origin protection.
+- Security headers using Helmet.
+- Tamper-evident audit logs.
+
+---
+
+## 📁 Project Structure
+
+```text
+SAHAYAK-B2B/
 │
-└── frontend/                   # Vite + Vanilla JS SPA
-    ├── index.html              # Entry point
-    ├── vite.config.js          # Proxy: /api → localhost:4000
-    └── src/
-        ├── main.js             # App bootstrap: router, auth guard, session restore
-        ├── router.js           # Hash-based client-side router
-        ├── store.js            # Reactive state store + demo users
-        ├── api.js              # REST API client (with demo data fallbacks)
-        ├── styles/
-        │   ├── design-system.css   # CSS tokens, purple/white theme
-        │   ├── components.css      # UI component library
-        │   └── animations.css      # Keyframes & layout
-        ├── components/
-        │   ├── sidebar.js          # Role-aware navigation sidebar
-        │   ├── ai-copilot.js       # Gemini AI assistant panel
-        │   ├── kaen-room.js        # KAEN negotiation room UI
-        │   └── toast.js            # Toast notifications
-        └── pages/
-            ├── welcome.js          # Landing page
-            ├── login.js            # Auth: login + demo shortcuts
-            ├── role-select.js      # Account type selection
-            ├── register.js         # Role-specific registration forms
-            ├── pending.js          # Verification pending status
-            ├── forgot-password.js  # Password reset flow
-            └── dashboard/
-                ├── retailer.js     # Retailer portal
-                ├── wholesaler.js   # Wholesaler/Seller portal
-                ├── manufacturer.js # Manufacturer portal
-                ├── logistics.js    # Logistics partner portal
-                └── admin.js        # Super Admin panel
+├── backend/
+│   ├── src/
+│   │   ├── server.js
+│   │   ├── auth/
+│   │   ├── ai/
+│   │   ├── kaen/
+│   │   ├── config/
+│   │   ├── middleware/
+│   │   └── routes/
+│   │
+│   └── prisma/
+│       └── schema.prisma
+│
+├── frontend/
+│   ├── index.html
+│   ├── vite.config.js
+│   └── src/
+│       ├── main.js
+│       ├── router.js
+│       ├── store.js
+│       ├── api.js
+│       │
+│       ├── styles/
+│       │   ├── design-system.css
+│       │   ├── components.css
+│       │   └── animations.css
+│       │
+│       ├── components/
+│       │   ├── sidebar.js
+│       │   ├── ai-copilot.js
+│       │   ├── kaen-room.js
+│       │   └── toast.js
+│       │
+│       └── pages/
+│           ├── welcome.js
+│           ├── login.js
+│           ├── register.js
+│           └── dashboard/
+│
+├── netlify/
+│   └── server/
+│
+├── netlify.toml
+├── package.json
+└── README.md
 ```
-
-**Tech Stack:**
-- **Frontend**: Vite 5, Vanilla JS (ES Modules), CSS Custom Properties
-- **Backend**: Node.js 20+, Express 4, Prisma ORM
-- **Database**: PostgreSQL 15+
-- **AI**: Google Gemini 2.5 Flash (`@google/genai`)
-- **Auth**: Argon2id password hashing, HttpOnly session cookies, Google OAuth 2.0
-- **Negotiation**: KAEN Engine (1.35-power concession curves)
 
 ---
 
-## Quick Start
+## ⚙️ Getting Started
 
 ### Prerequisites
 
-- Node.js 20+
-- PostgreSQL 15+
-- A Google Cloud project (for Google OAuth + Gemini API)
+- Node.js 20 or higher.
+- PostgreSQL 15 or compatible PostgreSQL database.
+- Google Gemini API key.
+- Google OAuth credentials (if using Google Sign-In).
 
-### 1. Clone & Install
+### 1. Clone the Repository
 
 ```bash
-# Install both backend and frontend dependencies
+git clone https://github.com/venkatavarshith999/SAHAYAK-B2B.git
+
+cd SAHAYAK-B2B
+```
+
+### 2. Install Dependencies
+
+```bash
 npm run install:all
 ```
 
-Or manually:
-```bash
-cd backend && npm install
-cd ../frontend && npm install
-```
+### 3. Configure Environment Variables
 
-### 2. Configure Environment
+Create the backend environment file:
 
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env with your values (see Environment Setup below)
 ```
 
-### 3. Set Up Database
+Configure the following values:
+
+```env
+DATABASE_URL="your-postgresql-connection-string"
+
+PORT=4000
+NODE_ENV="development"
+
+FRONTEND_ORIGIN="http://localhost:5173"
+
+SESSION_SECRET="your-secure-session-secret"
+SESSION_TTL_HOURS=24
+
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:4000/api/auth/google/callback"
+
+GEMINI_API_KEY="your-gemini-api-key"
+GEMINI_MODEL="gemini-2.5-flash"
+```
+
+Never commit real API keys, passwords or database credentials.
+
+### 4. Generate Prisma Client
 
 ```bash
-# Generate Prisma client
 npm run db:generate
+```
 
-# Run migrations (creates all tables)
+### 5. Run Database Migrations
+
+```bash
 npm run db:migrate
 ```
 
-### 4. Start Development Servers
+### 6. Start Backend
 
-**Terminal 1 — Backend API (port 4000):**
 ```bash
 npm run dev:backend
 ```
 
-**Terminal 2 — Frontend (port 5173):**
+Backend:
+
+`http://localhost:4000`
+
+### 7. Start Frontend
+
+Open another terminal:
+
 ```bash
 npm run dev:frontend
 ```
 
-Open: **http://localhost:5173**
+Frontend:
+
+`http://localhost:5173`
 
 ---
 
-## Environment Setup
+## 🌐 Deployment
 
-Edit `backend/.env`:
+The project includes Netlify deployment configuration.
 
-```env
-# PostgreSQL Connection
-DATABASE_URL="postgresql://sahayak_user:your_password@localhost:5432/sahayak_b2b?schema=public"
+**Live Application**
 
-# Server
-PORT=4000
-NODE_ENV="development"
-FRONTEND_ORIGIN="http://localhost:5173"
-SESSION_SECRET="generate-with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
-SESSION_TTL_HOURS=24
+[https://sahayak-b2b.netlify.app/](https://sahayak-b2b.netlify.app/)
 
-# Google OAuth 2.0
-GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="your-client-secret"
-GOOGLE_REDIRECT_URI="http://localhost:4000/api/auth/google/callback"
+**Deployment Configuration**
 
-# Gemini AI
-GEMINI_API_KEY="your-gemini-api-key"
-GEMINI_MODEL="gemini-2.5-flash"
-GEMINI_RATE_LIMIT_PER_MIN=30
-```
+- Frontend build output: `frontend/dist`
+- Deployment configuration: `netlify.toml`
+- Netlify build command: `npm run build:netlify`
+- Node.js version configured in Netlify: 24
+
+Production deployment requires correctly configured database, authentication and AI environment variables.
 
 ---
 
-## Database Setup
+## 🔌 API Overview
 
-### Create PostgreSQL Database
-
-```sql
-CREATE USER sahayak_user WITH PASSWORD 'your_password';
-CREATE DATABASE sahayak_b2b OWNER sahayak_user;
-GRANT ALL PRIVILEGES ON DATABASE sahayak_b2b TO sahayak_user;
-```
-
-### Run Migrations
-
-```bash
-cd backend
-npx prisma migrate dev --name init
-```
-
-### Create First Admin Account
-
-After migration, create a Super Admin user directly in the database:
-
-```sql
-INSERT INTO "User" (id, email, "fullName", "passwordHash", role, status, "emailVerified", "createdAt", "updatedAt")
-VALUES (
-  gen_random_uuid(),
-  'admin@sahayak.in',
-  'Platform Admin',
-  -- Generate hash with: node -e "const a = require('argon2'); a.hash('yourpassword').then(h => console.log(h));"
-  '$argon2id$v=19$m=65536,t=3,p=1$...',
-  'SUPER_ADMIN',
-  'ACTIVE',
-  true,
-  NOW(),
-  NOW()
-);
-```
-
-> **Note**: Admin accounts cannot be registered via the public UI. They must be created directly in the database or by an existing Super Admin.
+| API Route | Purpose |
+|---|---|
+| `/api/auth` | Authentication |
+| `/api/org` | Organization management |
+| `/api/buyer` | Buyer operations |
+| `/api/seller` | Seller operations |
+| `/api/worker` | Worker operations |
+| `/api/logistics` | Logistics operations |
+| `/api/rfqs` | Request for quotation |
+| `/api/orders` | Order management |
+| `/api/ai/chat` | AI business assistant |
+| `/api/kaen/negotiate` | Negotiation engine |
+| `/api/notifications` | Notifications |
+| `/api/admin` | Administration |
 
 ---
 
-## Running the Application
+## 🗺️ Future Development
 
-### Development
-
-```bash
-# Backend (with file watching)
-cd backend && npm run dev        # → http://localhost:4000
-
-# Frontend (Vite HMR)
-cd frontend && npm run dev       # → http://localhost:5173
-```
-
-### Production Build
-
-```bash
-cd frontend && npm run build     # Outputs to frontend/dist/
-```
-
-Serve `frontend/dist/` from any static host (Nginx, Vercel, Netlify, etc.). Set backend URL in env.
+- Expand AI-powered business intelligence.
+- Improve supplier and product discovery.
+- Enhance negotiation capabilities.
+- Expand logistics integrations.
+- Improve marketplace analytics.
+- Strengthen scalability and security.
+- Introduce additional business categories.
 
 ---
 
-## Role-Based Portals
+## 🤝 Contributing
 
-| Role | Portal | Key Features |
-|------|--------|--------------|
-| **Retailer / Buyer** | `/dashboard` | AI market intel, supplier discovery, KAEN negotiation, RFQ management |
-| **Wholesaler / Seller** | `/dashboard` | Catalogue management, buyer enquiries, quotations, revenue analytics |
-| **Manufacturer** | `/dashboard` | Production capacity, bulk orders, distributor network, supply agreements |
-| **Logistics Partner** | `/dashboard` | Shipment tracking, delivery assignments, proof of delivery |
-| **Admin** | `/dashboard` | User management, verification queue, audit logs, platform analytics |
+Contributions and suggestions are welcome.
 
----
-
-## Demo Mode
-
-The app automatically enters **Demo Mode** when the backend is unavailable.
-
-**1-Click Demo Login** (available on the login page):
-
-| Role | Demo User |
-|------|-----------|
-| 🛒 Retailer | Arjun Rao — Sri Balaji Textiles, Vijayawada |
-| 📦 Wholesaler | Priya Krishnan — Krishna Wholesale, Hyderabad |
-| 🏭 Manufacturer | Ravi Sharma — Green Horticulture Pvt Ltd, Pune |
-| 🚚 Logistics | Anjali Nair — Fast Freight Solutions, Kochi |
-| 🔐 Admin | Platform Admin — Super Admin |
-
-Demo data is clearly labelled and never presented as production data.
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes.
+4. Test your implementation.
+5. Submit a pull request.
 
 ---
 
-## API Reference
+## 💜 Project Links
 
-### Auth
+<div align="center">
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/register` | Register new business account |
-| `POST` | `/api/auth/login` | Email + password login |
-| `POST` | `/api/auth/logout` | Invalidate session |
-| `GET`  | `/api/me` | Get current authenticated user |
-| `POST` | `/api/auth/forgot-password` | Request password reset email |
-| `POST` | `/api/auth/reset-password` | Complete password reset |
-| `GET`  | `/api/auth/google/redirect` | Initiate Google OAuth flow |
-| `GET`  | `/api/auth/google/callback` | Google OAuth callback |
-| `POST` | `/api/auth/google` | Verify Google ID token (SPA flow) |
+### SAHAYAK B2B
 
-### AI & KAEN
+**Smart Business. Better Connections. Stronger Trade.**
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/ai/chat` | Gemini AI business assistant |
-| `POST` | `/api/kaen/negotiate` | KAEN negotiation round evaluation |
+<br/>
 
-### Admin (requires admin role)
+[🌐 Visit Live Website](https://sahayak-b2b.netlify.app/)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET`  | `/api/admin/stats` | Platform statistics |
-| `GET`  | `/api/admin/users` | User management list |
-| `PATCH`| `/api/admin/users/:id/status` | Update user status |
-| `GET`  | `/api/admin/verifications` | Pending verification queue |
-| `POST` | `/api/admin/verifications/:id/approve` | Approve business |
-| `POST` | `/api/admin/verifications/:id/reject` | Reject business |
-| `GET`  | `/api/admin/audit-logs` | Tamper-evident audit log |
+[💻 Explore GitHub Repository](https://github.com/venkatavarshith999/SAHAYAK-B2B)
 
-### Notifications
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET`  | `/api/notifications` | Get user notifications |
-| `POST` | `/api/notifications/:id/read` | Mark as read |
-| `POST` | `/api/notifications/read-all` | Mark all as read |
+</div>
 
 ---
 
-## Google OAuth Setup
+## 📄 License
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable **Google+ API** and **Google Identity API**
-4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
-5. Application type: **Web application**
-6. Authorized redirect URIs:
-   - `http://localhost:4000/api/auth/google/callback` (development)
-   - `https://yourdomain.com/api/auth/google/callback` (production)
-7. Copy the **Client ID** and **Client Secret** into `backend/.env`
+Private project. All rights reserved.
 
 ---
 
-## Gemini AI Setup
+<div align="center">
 
-1. Go to [Google AI Studio](https://aistudio.google.com/)
-2. Create an API key
-3. Set `GEMINI_API_KEY` in `backend/.env`
-4. The model is configured as `gemini-2.5-flash` (can be changed via `GEMINI_MODEL`)
+### 💜 Built to Connect Businesses. Powered to Simplify Trade.
 
-The AI assistant is role-aware — it tailors responses for retailers, wholesalers, manufacturers, logistics partners, and admins respectively.
+**SAHAYAK B2B**
 
----
+*Discover • Connect • Negotiate • Grow*
 
-## Security
-
-- **Passwords**: Argon2id with 64MB memory cost, 3 iterations
-- **Sessions**: HttpOnly cookies, SHA-256 hashed token storage
-- **RBAC**: Permission checks on every protected endpoint
-- **Admin**: Cannot be created via public registration — database only
-- **Rate limiting**: Auth routes (30/15min), AI (30/min), forgot-password (5/hour)
-- **Audit logs**: Chained SHA-256 hashes for tamper evidence
-- **Google OAuth**: ID token verified server-side via `google-auth-library`
-
----
-
-## License
-
-Private — SAHAYAK B2B Platform. All rights reserved.
+</div>
