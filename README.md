@@ -28,6 +28,35 @@
 
 ---
 
+## 🌐 Explore the Sahayak Ecosystem
+
+The Sahayak ecosystem consists of two connected platforms designed to provide AI assistance and simplify business operations.
+
+| Platform | Live Website | GitHub Repository |
+|---|---|---|
+| 💜 **Sahayak AI — Customer Portal** | [Visit Website](https://sahayak-ai-customer-website.vercel.app/) | [View Repository](https://github.com/jayasankartanguturi/SAHAYAK-AI-CUSTOMER-WEBSITE) |
+| 🏢 **Sahayak B2B — Business Portal** | [Visit Website](https://sahayak-b2b.netlify.app/) | [View Repository](https://github.com/venkatavarshith999/SAHAYAK-B2B) |
+
+### 💜 Sahayak AI — Customer Portal
+
+**AI Assistance for Every Profession**
+
+An AI-powered customer platform designed to provide profession-based assistance, multilingual support and useful information through a unified interface.
+
+- [🌐 Live Website](https://sahayak-ai-customer-website.vercel.app/)
+- [💻 GitHub Repository](https://github.com/jayasankartanguturi/SAHAYAK-AI-CUSTOMER-WEBSITE)
+
+### 🏢 Sahayak B2B — Business & Trade Portal
+
+**Smart Business. Better Connections. Stronger Trade.**
+
+An AI-powered marketplace connecting retailers, buyers, wholesalers, manufacturers and logistics partners.
+
+- [🌐 Live Website](https://sahayak-b2b.netlify.app/)
+- [💻 GitHub Repository](https://github.com/venkatavarshith999/SAHAYAK-B2B)
+
+---
+
 ## ✨ About the Project
 
 **SAHAYAK B2B** is an AI-powered business and trade marketplace that connects different participants in the supply chain through a unified digital platform.
@@ -452,15 +481,23 @@ Contributions and suggestions are welcome.
 
 <div align="center">
 
-### SAHAYAK B2B
+### 💜 SAHAYAK AI — Customer Portal
+
+**AI Assistance for Every Profession**
+
+[🌐 Visit Sahayak AI Website](https://sahayak-ai-customer-website.vercel.app/)
+
+[💻 Explore Sahayak AI Repository](https://github.com/jayasankartanguturi/SAHAYAK-AI-CUSTOMER-WEBSITE)
+
+---
+
+### 🏢 SAHAYAK B2B — Business & Trade Portal
 
 **Smart Business. Better Connections. Stronger Trade.**
 
-<br/>
+[🌐 Visit Sahayak B2B Website](https://sahayak-b2b.netlify.app/)
 
-[🌐 Visit Live Website](https://sahayak-b2b.netlify.app/)
-
-[💻 Explore GitHub Repository](https://github.com/venkatavarshith999/SAHAYAK-B2B)
+[💻 Explore Sahayak B2B Repository](https://github.com/venkatavarshith999/SAHAYAK-B2B)
 
 </div>
 
@@ -474,10 +511,10 @@ Private project. All rights reserved.
 
 <div align="center">
 
-### 💜 Built to Connect Businesses. Powered to Simplify Trade.
+### 💜 Built to Connect People, Assist Professions & Simplify Trade.
 
-**SAHAYAK B2B**
+**SAHAYAK AI × SAHAYAK B2B**
 
-*Discover • Connect • Negotiate • Grow*
+*Discover • Connect • Assist • Negotiate • Grow*
 
 </div>
