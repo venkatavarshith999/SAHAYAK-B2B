@@ -4,6 +4,8 @@
  */
 
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -141,8 +143,12 @@ export async function bootstrapSuperAdminIfNeeded() {
 export { app };
 export default app;
 
-// ── Start Standalone Server (local dev / traditional Node host) ───────────────
-if (!process.env.NETLIFY) {
+// ── Start Standalone Server (only when backend/src/server.js is run directly) ─
+const isDirectRun = Boolean(
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
+if (isDirectRun && !process.env.NETLIFY && !process.env.NETLIFY_DB_URL) {
   const PORT = process.env.PORT || 4000;
   bootstrapSuperAdminIfNeeded().catch(() => {});
   app.listen(PORT, () => {

@@ -47,11 +47,20 @@ export function verifyPendingGoogleToken(token) {
   }
 }
 
+function isSecureCookieEnv() {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.NETLIFY) ||
+    Boolean(process.env.NETLIFY_DB_URL) ||
+    String(process.env.FRONTEND_ORIGIN || '').startsWith('https://')
+  );
+}
+
 export function setPendingGoogleCookie(res, payload) {
   const signed = signPendingGoogleToken(payload);
   res.cookie('sahayak_google_pending', signed, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
+    secure: isSecureCookieEnv(),
     sameSite: 'lax',
     maxAge: 10 * 60 * 1000
   });
@@ -90,7 +99,7 @@ export function generateInviteCode() {
 export function setSessionCookie(res, rawToken) {
   res.cookie('sahayak_session', rawToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
+    secure: isSecureCookieEnv(),
     sameSite: 'lax',
     maxAge: Number(process.env.SESSION_TTL_HOURS || 24) * 3600 * 1000
   });

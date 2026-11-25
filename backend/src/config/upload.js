@@ -7,13 +7,26 @@ import { fileURLToPath } from 'url';
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 
-const isReadOnlyRuntime = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
-export const UPLOAD_ROOT = isReadOnlyRuntime
+const isReadOnlyRuntime = Boolean(
+  process.env.NETLIFY ||
+  process.env.NETLIFY_DB_URL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  currentDir.startsWith('/opt/user')
+);
+let resolvedUploadRoot = isReadOnlyRuntime
   ? '/tmp/sahayak-uploads'
   : path.resolve(currentDir, '../../uploads');
-if (!fs.existsSync(UPLOAD_ROOT)) {
-  fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+try {
+  if (!fs.existsSync(resolvedUploadRoot)) {
+    fs.mkdirSync(resolvedUploadRoot, { recursive: true });
+  }
+} catch {
+  resolvedUploadRoot = '/tmp/sahayak-uploads';
+  if (!fs.existsSync(resolvedUploadRoot)) {
+    fs.mkdirSync(resolvedUploadRoot, { recursive: true });
+  }
 }
+export const UPLOAD_ROOT = resolvedUploadRoot;
 
 const ALLOWED_MIME_TO_EXT = {
   'application/pdf': '.pdf',
