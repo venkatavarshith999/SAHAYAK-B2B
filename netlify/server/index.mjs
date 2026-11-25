@@ -8,7 +8,8 @@ import app, { bootstrapSuperAdminIfNeeded } from '../../backend/src/server.js';
 import { prisma } from '../../backend/src/config/db.js';
 
 export const config = {
-  path: '/api/*'
+  path: '/api/*',
+  includedFiles: ['../../node_modules/.prisma/client/**']
 };
 
 onStart(async () => {
