@@ -15,9 +15,13 @@ export function csrfOriginGuard(req, res, next) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const netlifyOrigins = [process.env.URL, process.env.DEPLOY_PRIME_URL]
+    .map((s) => (s || '').trim())
+    .filter(Boolean);
   const allowedOrigins = new Set([
     allowedOrigin,
     ...extraOrigins,
+    ...netlifyOrigins,
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     `http://localhost:${process.env.PORT || 4000}`

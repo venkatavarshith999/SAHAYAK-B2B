@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import { prisma } from './config/db.js';
 import { csrfOriginGuard } from './middleware/csrf.js';
 import { requireAuth } from './middleware/auth.js';
-import { sanitizeUser } from './auth/authService.js';
+import { sanitizeUser, hashPassword } from './auth/authService.js';
 
 import authRoutes from './routes/auth.routes.js';
 import orgRoutes from './routes/org.routes.js';
@@ -32,6 +32,7 @@ import notificationRoutes from './routes/notification.routes.js';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ── Security & Parsing Middleware ─────────────────────────────────────────────
 app.use(helmet());
@@ -40,6 +41,9 @@ const corsAllowedOrigins = new Set([
   ...String(process.env.EXTRA_ALLOWED_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
+    .filter(Boolean),
+  ...[process.env.URL, process.env.DEPLOY_PRIME_URL]
+    .map((s) => (s || '').trim())
     .filter(Boolean)
 ]);
 
@@ -107,13 +111,46 @@ app.use((req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 
-// ── Start Server ──────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log('');
-  console.log('  🚀 SAHAYAK B2B API v2.1.0 (Modular)');
-  console.log(`  📡 Listening on http://localhost:${PORT}`);
-  console.log(`  🌐 Frontend origin: ${process.env.FRONTEND_ORIGIN || 'http://localhost:5173'}`);
-  console.log(`  🤖 AI Model: ${process.env.GEMINI_MODEL || 'gemini-3.8-flash'}`);
-  console.log('');
-});
+// ── Optional Idempotent Super Admin Bootstrap (via Secret Env Vars Only) ──────
+export async function bootstrapSuperAdminIfNeeded() {
+  const email = (process.env.BOOTSTRAP_ADMIN_EMAIL || '').toLowerCase().trim();
+  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD || '';
+  if (!email || !password) return;
+
+  try {
+    const existing = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+    if (existing) return;
+
+    const passwordHash = await hashPassword(password);
+    await prisma.user.create({
+      data: {
+        email,
+        fullName: process.env.BOOTSTRAP_ADMIN_NAME || 'Platform Super Admin',
+        passwordHash,
+        role: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+        emailVerified: true
+      }
+    });
+    console.log('[SAHAYAK] Bootstrapped initial SUPER_ADMIN account.');
+  } catch (err) {
+    console.error('[SAHAYAK] Super Admin bootstrap skipped:', err.message);
+  }
+}
+
+export { app };
+export default app;
+
+// ── Start Standalone Server (local dev / traditional Node host) ───────────────
+if (!process.env.NETLIFY) {
+  const PORT = process.env.PORT || 4000;
+  bootstrapSuperAdminIfNeeded().catch(() => {});
+  app.listen(PORT, () => {
+    console.log('');
+    console.log('  🚀 SAHAYAK B2B API v2.1.0 (Modular)');
+    console.log(`  📡 Listening on http://localhost:${PORT}`);
+    console.log(`  🌐 Frontend origin: ${process.env.FRONTEND_ORIGIN || 'http://localhost:5173'}`);
+    console.log(`  🤖 AI Model: ${process.env.GEMINI_MODEL || 'gemini-3.8-flash'}`);
+    console.log('');
+  });
+}
