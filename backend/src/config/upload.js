@@ -4,13 +4,13 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFile);
 
 const isReadOnlyRuntime = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
 export const UPLOAD_ROOT = isReadOnlyRuntime
   ? '/tmp/sahayak-uploads'
-  : path.resolve(__dirname, '../../uploads');
+  : path.resolve(currentDir, '../../uploads');
 if (!fs.existsSync(UPLOAD_ROOT)) {
   fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
 }
