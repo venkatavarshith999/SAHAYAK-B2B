@@ -9,7 +9,7 @@ import { prisma } from '../../backend/src/config/db.js';
 
 export const config = {
   path: '/api/*',
-  includedFiles: ['../../node_modules/.prisma/client/**']
+  includedFiles: ['prisma-engines/**']
 };
 
 onStart(async () => {
