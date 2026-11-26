@@ -6,7 +6,8 @@
 import { api } from '../api.js';
 import { navigate } from '../router.js';
 import { showToast } from '../components/toast.js';
-import { store, setState, persistUser, DEMO_USERS } from '../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity, DEMO_USERS } from '../store.js';
+import { resolvePortalDestination } from '../utils/portalResolver.js';
 
 export default function renderLogin(container, query = {}) {
   container.innerHTML = `
@@ -532,6 +533,11 @@ export default function renderLogin(container, query = {}) {
     }
   }
 
+  // Pre-fill email if navigated via ?email=... (e.g. switching from pending applicant tab)
+  if (query?.email && emailInput && !emailInput.value) {
+    emailInput.value = query.email;
+  }
+
   // Show OAuth redirect errors if present in query params
   if (query?.error) {
     const oauthMessages = {
@@ -594,13 +600,11 @@ export default function renderLogin(container, query = {}) {
         const res = await api.googleLink(pwd);
         const user = res.user || res;
         persistUser(user);
+        broadcastSessionIdentity(user);
         setState({ user, demoMode: false, sessionChecked: true });
         showToast('Google account linked! Welcome back.', 'success');
-        if (['PENDING_VERIFICATION', 'NEEDS_INFO', 'ON_HOLD', 'INCOMPLETE_PROFILE'].includes(user.status)) {
-          navigate('/pending');
-        } else {
-          navigate('/dashboard');
-        }
+        const dest = resolvePortalDestination(user);
+        navigate(dest.route, true);
       } catch (err) {
         const msg = err.message || 'Password verification failed. Please try again.';
         showError(msg);
@@ -694,14 +698,12 @@ export default function renderLogin(container, query = {}) {
         const user = res.user || res;
 
         persistUser(user);
+        broadcastSessionIdentity(user);
         setState({ user, demoMode: false, sessionChecked: true });
         showToast(`Welcome back, ${user.fullName || user.email}!`, 'success');
 
-        if (['PENDING_VERIFICATION', 'NEEDS_INFO', 'ON_HOLD', 'INCOMPLETE_PROFILE'].includes(user.status)) {
-          navigate('/pending');
-          return;
-        }
-        navigate('/dashboard');
+        const dest = resolvePortalDestination(user);
+        navigate(dest.route, true);
       } catch (err) {
         const message = err.message || 'Invalid email or password. Please try again.';
         showError(message);

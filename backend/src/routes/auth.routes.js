@@ -6,6 +6,7 @@ import { prisma } from '../config/db.js';
 import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { writeAuditLog } from '../services/auditService.js';
+import { resolvePortalDestination } from '../config/permissions.js';
 import {
   registerBusinessAccount,
   registerGoogleBusinessAccount,
@@ -14,6 +15,7 @@ import {
   verifyGoogleIdToken,
   resolveGoogleIdentity,
   linkGoogleAccount,
+  getAuthCookieOptions,
   setPendingGoogleCookie,
   clearPendingGoogleCookie,
   verifyPendingGoogleToken,
@@ -21,6 +23,7 @@ import {
   verifyPassword,
   createSession,
   setSessionCookie,
+  clearSessionCookie,
   recordLoginAttempt,
   sanitizeUser
 } from '../auth/authService.js';
@@ -110,7 +113,13 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: {
-        businessProfile: true,
+        businessProfile: {
+          include: {
+            verification: {
+              include: { _count: { select: { documents: true } } }
+            }
+          }
+        },
         memberships: {
           where: { employmentStatus: 'ACTIVE' },
           include: { organization: true, branch: true }
@@ -203,7 +212,7 @@ router.post('/worker/join', authLimiter, validateBody(workerJoinSchema), async (
 router.post('/logout', requireAuth, async (req, res) => {
   try {
     await prisma.userSession.update({ where: { id: req.sessionId }, data: { revokedAt: new Date() } });
-    res.clearCookie('sahayak_session');
+    clearSessionCookie(res);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Logout failed.' });
@@ -366,16 +375,41 @@ function timingSafeStateEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+function stripTrailingSlash(url) {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+/**
+ * Resolves exact OAuth frontendOrigin and callback redirectUri consistently
+ * across /google/status, /google/redirect, and /google/callback without hardcoded URLs.
+ */
+export function resolveOAuthUrls(req) {
+  const host = req?.get?.('x-forwarded-host') || req?.get?.('host') || '';
+  const proto = req?.get?.('x-forwarded-proto') || req?.protocol || 'http';
+  const requestOrigin = host ? `${proto}://${host}` : '';
+
+  const frontendOrigin = stripTrailingSlash(
+    process.env.FRONTEND_ORIGIN || process.env.URL || requestOrigin
+  );
+  const explicitRedirect = stripTrailingSlash(process.env.GOOGLE_REDIRECT_URI);
+  const baseCallbackOrigin = stripTrailingSlash(process.env.URL || requestOrigin || frontendOrigin);
+  const redirectUri = explicitRedirect || `${baseCallbackOrigin}/api/auth/google/callback`;
+
+  return { frontendOrigin, redirectUri };
+}
+
 // ── Google OAuth: Public Configuration Status (never leaks credentials) ──────
-router.get('/google/status', (_req, res) => {
+router.get('/google/status', (req, res) => {
   const configured = Boolean(
     process.env.GOOGLE_CLIENT_ID &&
     process.env.GOOGLE_CLIENT_SECRET &&
     !String(process.env.GOOGLE_CLIENT_ID).includes('your-google')
   );
+  const { redirectUri } = resolveOAuthUrls(req);
   res.json({
     configured,
-    callbackPath: '/api/auth/google/callback'
+    callbackPath: '/api/auth/google/callback',
+    redirectUri
   });
 });
 
@@ -383,20 +417,14 @@ router.get('/google/status', (_req, res) => {
 router.get('/google/redirect', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
-  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  const { frontendOrigin, redirectUri } = resolveOAuthUrls(req);
 
   if (!clientId || !clientSecret || clientId.includes('your-google')) {
     return res.redirect(`${frontendOrigin}/#/login?error=google_not_configured`);
   }
 
   const state = crypto.randomBytes(24).toString('hex');
-  res.cookie('sahayak_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.NETLIFY),
-    sameSite: 'lax',
-    maxAge: 10 * 60 * 1000
-  });
+  res.cookie('sahayak_oauth_state', state, getAuthCookieOptions(10 * 60 * 1000));
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -414,9 +442,8 @@ router.get('/google/redirect', (req, res) => {
 router.get('/google/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
   const expectedState = req.cookies?.sahayak_oauth_state;
-  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
-  res.clearCookie('sahayak_oauth_state');
+  const { frontendOrigin, redirectUri } = resolveOAuthUrls(req);
+  res.clearCookie('sahayak_oauth_state', getAuthCookieOptions());
 
   if (oauthError) {
     const codeKey = String(oauthError) === 'access_denied' ? 'google_cancelled' : 'google_failed';
@@ -470,11 +497,8 @@ router.get('/google/callback', async (req, res) => {
       clearPendingGoogleCookie(res);
       await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE', req });
 
-      const pendingStatuses = new Set(['PENDING_VERIFICATION', 'INCOMPLETE_PROFILE', 'NEEDS_INFO', 'ON_HOLD']);
-      if (pendingStatuses.has(user.status)) {
-        return res.redirect(`${frontendOrigin}/#/pending`);
-      }
-      return res.redirect(`${frontendOrigin}/#/dashboard`);
+      const dest = resolvePortalDestination(user);
+      return res.redirect(`${frontendOrigin}/#${dest.route}`);
     }
 
     if (result.status === 'LINK_REQUIRED') {
@@ -540,10 +564,11 @@ router.post('/google/link', authLimiter, validateBody(googleLinkSchema), async (
     await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE_LINK', req });
     await writeAuditLog({
       actorId: user.id,
+      organizationId: user.memberships?.[0]?.organizationId || null,
       action: 'GOOGLE_ACCOUNT_LINKED',
-      targetType: 'User',
+      targetEntity: 'User',
       targetId: user.id,
-      metadata: { provider: 'google' }
+      details: { provider: 'google', email: user.email }
     });
 
     res.json({ status: 'AUTHENTICATED', user: sanitizeUser(user) });
@@ -572,10 +597,11 @@ router.post('/google/complete', authLimiter, validateBody(googleCompleteSchema),
     await recordLoginAttempt({ userId: user.id, email: user.email, success: true, method: 'GOOGLE_REGISTER', req });
     await writeAuditLog({
       actorId: user.id,
+      organizationId: org.id,
       action: 'BUSINESS_REGISTERED_GOOGLE',
-      targetType: 'Organization',
+      targetEntity: 'Organization',
       targetId: org.id,
-      metadata: { businessType: org.businessType, portalType: org.portalType }
+      details: { businessType: org.businessType, portalType: org.portalType }
     });
 
     res.status(201).json({ status: 'AUTHENTICATED', user: sanitizeUser(user) });

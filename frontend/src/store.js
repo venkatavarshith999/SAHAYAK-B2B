@@ -30,6 +30,8 @@ export function subscribe(fn) {
   return () => _listeners.delete(fn);
 }
 
+export const SESSION_OWNER_KEY = 'sb2b_active_session_owner';
+
 export function persistUser(user) {
   if (user) {
     sessionStorage.setItem('sb2b_user', JSON.stringify({
@@ -37,7 +39,10 @@ export function persistUser(user) {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      platformRole: user.platformRole || null,
+      businessType: user.businessType || user.organization?.businessType || user.businessProfile?.businessType || null,
       status: user.status,
+      portalDestination: user.portalDestination || null,
       emailVerified: Boolean(user.emailVerified),
       businessProfile: user.businessProfile || null,
       organization: user.organization || null,
@@ -45,6 +50,39 @@ export function persistUser(user) {
     }));
   } else {
     sessionStorage.removeItem('sb2b_user');
+  }
+}
+
+/**
+ * Broadcasts non-sensitive active session owner metadata across browser tabs so
+ * another tab can immediately detect when the browser's shared HttpOnly cookie
+ * switched to a different account (e.g., Super Admin logged in on Tab 2 while
+ * an applicant is viewing /pending on Tab 1). Never stores tokens or secrets.
+ */
+export function broadcastSessionIdentity(user) {
+  try {
+    if (user && user.id) {
+      localStorage.setItem(
+        SESSION_OWNER_KEY,
+        JSON.stringify({ uid: user.id, role: user.role, email: user.email, ts: Date.now() })
+      );
+    } else {
+      localStorage.setItem(
+        SESSION_OWNER_KEY,
+        JSON.stringify({ uid: null, role: null, email: null, ts: Date.now() })
+      );
+    }
+  } catch {
+    // Ignore storage quota/private-mode errors
+  }
+}
+
+export function getBrowserSessionOwner() {
+  try {
+    const raw = localStorage.getItem(SESSION_OWNER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
 }
 

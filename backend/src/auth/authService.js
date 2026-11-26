@@ -5,6 +5,7 @@ import { prisma } from '../config/db.js';
 import {
   PUBLIC_BUSINESS_TYPES,
   mapBusinessTypeToPortal,
+  resolvePortalDestination,
   WORKER_DEFAULT_PERMISSIONS
 } from '../config/permissions.js';
 
@@ -47,7 +48,7 @@ export function verifyPendingGoogleToken(token) {
   }
 }
 
-function isSecureCookieEnv() {
+export function isSecureCookieEnv() {
   return (
     process.env.NODE_ENV === 'production' ||
     Boolean(process.env.NETLIFY) ||
@@ -56,18 +57,28 @@ function isSecureCookieEnv() {
   );
 }
 
-export function setPendingGoogleCookie(res, payload) {
-  const signed = signPendingGoogleToken(payload);
-  res.cookie('sahayak_google_pending', signed, {
+export function getAuthCookieOptions(maxAge = undefined) {
+  const opts = {
     httpOnly: true,
     secure: isSecureCookieEnv(),
     sameSite: 'lax',
-    maxAge: 10 * 60 * 1000
-  });
+    path: '/'
+  };
+  if (maxAge !== undefined) opts.maxAge = maxAge;
+  return opts;
+}
+
+export function setPendingGoogleCookie(res, payload) {
+  const signed = signPendingGoogleToken(payload);
+  res.cookie('sahayak_google_pending', signed, getAuthCookieOptions(10 * 60 * 1000));
 }
 
 export function clearPendingGoogleCookie(res) {
-  res.clearCookie('sahayak_google_pending');
+  res.clearCookie('sahayak_google_pending', getAuthCookieOptions());
+}
+
+export function clearSessionCookie(res) {
+  res.clearCookie('sahayak_session', getAuthCookieOptions());
 }
 
 export async function hashPassword(plainPassword) {
@@ -97,12 +108,11 @@ export function generateInviteCode() {
 }
 
 export function setSessionCookie(res, rawToken) {
-  res.cookie('sahayak_session', rawToken, {
-    httpOnly: true,
-    secure: isSecureCookieEnv(),
-    sameSite: 'lax',
-    maxAge: Number(process.env.SESSION_TTL_HOURS || 24) * 3600 * 1000
-  });
+  res.cookie(
+    'sahayak_session',
+    rawToken,
+    getAuthCookieOptions(Number(process.env.SESSION_TTL_HOURS || 24) * 3600 * 1000)
+  );
 }
 
 export async function createSession(userId, req = null) {
@@ -140,6 +150,13 @@ export async function recordLoginAttempt({ userId = null, email, success, method
 export function sanitizeUser(user, membership = null) {
   const activeMembership = membership || user.memberships?.[0] || null;
   const org = activeMembership?.organization || null;
+  const portalDestination = resolvePortalDestination({
+    role: user.role,
+    status: user.status,
+    businessProfile: user.businessProfile || null,
+    organization: org,
+    membership: activeMembership
+  });
 
   return {
     id: user.id,
@@ -147,7 +164,10 @@ export function sanitizeUser(user, membership = null) {
     phone: user.phone || null,
     fullName: user.fullName,
     role: user.role,
+    platformRole: portalDestination.platformRole,
+    businessType: portalDestination.businessType,
     status: user.status,
+    portalDestination,
     emailVerified: user.emailVerified,
     phoneVerified: Boolean(user.phoneVerified),
     mfaEnabled: Boolean(user.mfaEnabled),
@@ -465,6 +485,31 @@ export async function joinAsInvitedWorker({ inviteCode, email, password, phone =
   return { user, invitation };
 }
 
+const VALID_GOOGLE_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
+
+export function validateGoogleTokenPayload(payload, expectedClientId = process.env.GOOGLE_CLIENT_ID) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Google identity token payload is missing.');
+  }
+  if (!expectedClientId || payload.aud !== expectedClientId) {
+    throw new Error('Google identity token audience mismatch.');
+  }
+  if (!VALID_GOOGLE_ISSUERS.has(String(payload.iss || ''))) {
+    throw new Error('Google identity token issuer is invalid.');
+  }
+  if (!payload.exp || Number(payload.exp) * 1000 <= Date.now()) {
+    throw new Error('Google identity token has expired.');
+  }
+  if (payload.email_verified !== true || !payload.email || !payload.sub) {
+    throw new Error('Google identity token email is missing or unverified.');
+  }
+  return {
+    sub: String(payload.sub),
+    email: String(payload.email).toLowerCase().trim(),
+    fullName: String(payload.name || payload.email.split('@')[0]).trim()
+  };
+}
+
 export async function verifyGoogleIdToken(idToken) {
   if (!process.env.GOOGLE_CLIENT_ID) {
     throw new Error('Google OAuth is not configured on this server.');
@@ -474,15 +519,7 @@ export async function verifyGoogleIdToken(idToken) {
     idToken,
     audience: process.env.GOOGLE_CLIENT_ID
   });
-  const payload = ticket.getPayload();
-  if (!payload || !payload.email || !payload.email_verified || !payload.sub) {
-    throw new Error('Google identity token could not be verified or email is unverified.');
-  }
-  return {
-    sub: String(payload.sub),
-    email: String(payload.email).toLowerCase().trim(),
-    fullName: String(payload.name || payload.email.split('@')[0]).trim()
-  };
+  return validateGoogleTokenPayload(ticket.getPayload(), process.env.GOOGLE_CLIENT_ID);
 }
 
 export async function resolveGoogleIdentity({ sub, email, fullName }) {

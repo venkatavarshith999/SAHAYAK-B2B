@@ -6,7 +6,8 @@
 import { api } from '../api.js';
 import { navigate } from '../router.js';
 import { showToast } from '../components/toast.js';
-import { setState, persistUser } from '../store.js';
+import { setState, persistUser, broadcastSessionIdentity } from '../store.js';
+import { resolvePortalDestination } from '../utils/portalResolver.js';
 import { esc } from '../utils/sanitize.js';
 
 export default function renderWorkerAccess(container, query = {}) {
@@ -162,9 +163,10 @@ export default function renderWorkerAccess(container, query = {}) {
         container.querySelector('#w-login-password').value
       );
       persistUser(user);
+      broadcastSessionIdentity(user);
       setState({ user, demoMode: false, sessionChecked: true });
       showToast(`Welcome, ${user.fullName}!`, 'success');
-      navigate('/dashboard');
+      navigate(resolvePortalDestination(user).route, true);
     } catch (err) {
       showErr(err.message || 'Worker sign-in failed.');
     } finally {
@@ -185,9 +187,10 @@ export default function renderWorkerAccess(container, query = {}) {
         password: container.querySelector('#w-join-password').value
       });
       persistUser(user);
+      broadcastSessionIdentity(user);
       setState({ user, demoMode: false, sessionChecked: true });
       showToast(`Joined ${user.organization?.name || 'organization'} successfully!`, 'success');
-      navigate('/dashboard');
+      navigate(resolvePortalDestination(user).route, true);
     } catch (err) {
       showErr(err.message || 'Unable to join organization with this invitation code.');
     } finally {

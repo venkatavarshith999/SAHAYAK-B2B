@@ -4,7 +4,7 @@
  * Shipments & structured lifecycle tracking (with POD), Fleet & Vehicles, Drivers & Team, Branches, Docs.
  */
 
-import { store, setState, persistUser } from '../../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity } from '../../store.js';
 import { api } from '../../api.js';
 import { renderSidebar } from '../../components/sidebar.js';
 import { AICopilot } from '../../components/ai-copilot.js';
@@ -328,6 +328,7 @@ function updateNavActive(tab) {
 async function handleLogout() {
   try { await api.logout(); } catch {}
   persistUser(null);
+  broadcastSessionIdentity(null);
   setState({ user: null, demoMode: false });
   navigate('/');
 }

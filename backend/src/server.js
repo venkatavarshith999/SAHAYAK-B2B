@@ -156,7 +156,7 @@ if (isDirectRun && !process.env.NETLIFY && !process.env.NETLIFY_DB_URL) {
     console.log('  🚀 SAHAYAK B2B API v2.1.0 (Modular)');
     console.log(`  📡 Listening on http://localhost:${PORT}`);
     console.log(`  🌐 Frontend origin: ${process.env.FRONTEND_ORIGIN || 'http://localhost:5173'}`);
-    console.log(`  🤖 AI Model: ${process.env.GEMINI_MODEL || 'gemini-3.8-flash'}`);
+    console.log(`  🤖 AI Model: ${process.env.GEMINI_MODEL || 'gemini-3.6-flash'}`);
     console.log('');
   });
 }

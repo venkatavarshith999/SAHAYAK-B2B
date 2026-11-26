@@ -3,7 +3,7 @@
  * Backed 100% by PostgreSQL APIs (/api/buyer/* and /api/org/*). Zero hardcoded fake data.
  */
 
-import { store, setState, persistUser } from '../../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity } from '../../store.js';
 import { api } from '../../api.js';
 import { renderSidebar } from '../../components/sidebar.js';
 import { AICopilot } from '../../components/ai-copilot.js';
@@ -379,6 +379,7 @@ function updateNavActive(tab) {
 async function handleLogout() {
   try { await api.logout(); } catch {}
   persistUser(null);
+  broadcastSessionIdentity(null);
   setState({ user: null, demoMode: false });
   navigate('/');
 }

@@ -10,6 +10,9 @@
     "test:phase-b": "node tests/phaseB.test.mjs",
     "test:phase-c": "node tests/phaseC.test.mjs",
     "test:phase-d": "node tests/phaseD.test.mjs",
+    "test:google-oauth": "node tests/googleOAuth.test.mjs",
+    "test:stabilization-unit": "node tests/stabilizationUnit.test.mjs",
+    "test:stabilization-e2e": "node tests/stabilizationE2E.test.mjs",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate"
   },

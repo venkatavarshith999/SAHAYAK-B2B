@@ -31,6 +31,124 @@ export function mapBusinessTypeToPortal(businessType) {
   return null;
 }
 
+export const PENDING_ACCOUNT_STATUSES = new Set([
+  'INCOMPLETE_PROFILE',
+  'PENDING_VERIFICATION',
+  'NEEDS_INFO',
+  'ON_HOLD'
+]);
+
+/**
+ * Single authoritative backend portal-resolution logic.
+ * Strictly separates platform role, persisted business type, and verification status.
+ * Business accounts can NEVER resolve to the Admin Portal.
+ */
+export function resolvePortalDestination(user) {
+  if (!user || !user.role) {
+    return {
+      platformRole: null,
+      businessType: null,
+      portal: null,
+      workspace: null,
+      route: '/login'
+    };
+  }
+
+  const role = String(user.role).toUpperCase();
+  const status = String(user.status || '').toUpperCase();
+  const org = user.organization || user.memberships?.[0]?.organization || null;
+  const membership = user.membership || user.memberships?.[0] || null;
+
+  const platformRole =
+    role === 'SUPER_ADMIN'
+      ? 'SUPER_ADMIN'
+      : ADMIN_ROLES.has(role)
+        ? 'ADMIN'
+        : role === 'WORKER'
+          ? 'WORKER'
+          : 'BUSINESS_USER';
+
+  const businessType =
+    platformRole === 'BUSINESS_USER'
+      ? String(org?.businessType || user.businessProfile?.businessType || role).toUpperCase()
+      : null;
+
+  if (status === 'REJECTED' || status === 'SUSPENDED') {
+    return {
+      platformRole,
+      businessType,
+      portal: 'RESTRICTED',
+      workspace: status,
+      route: '/restricted'
+    };
+  }
+
+  if (PENDING_ACCOUNT_STATUSES.has(status)) {
+    return {
+      platformRole,
+      businessType,
+      portal: 'PENDING',
+      workspace: status,
+      route: '/pending'
+    };
+  }
+
+  if (platformRole === 'SUPER_ADMIN' || platformRole === 'ADMIN') {
+    return {
+      platformRole,
+      businessType: null,
+      portal: 'ADMIN',
+      workspace: role,
+      route: '/dashboard/admin'
+    };
+  }
+
+  if (platformRole === 'WORKER') {
+    return {
+      platformRole,
+      businessType: org?.businessType || null,
+      portal: 'WORKER',
+      workspace: membership?.workerRole || 'WORKER',
+      route: '/dashboard/worker'
+    };
+  }
+
+  const resolvedPortal = org?.portalType || mapBusinessTypeToPortal(businessType);
+  if (resolvedPortal === 'LOGISTICS' || businessType === 'LOGISTICS') {
+    return {
+      platformRole,
+      businessType: 'LOGISTICS',
+      portal: 'LOGISTICS',
+      workspace: 'LOGISTICS',
+      route: '/dashboard/logistics'
+    };
+  }
+
+  if (resolvedPortal === 'SELLER' || ['WHOLESALER', 'MANUFACTURER', 'DISTRIBUTOR', 'SUPPLIER'].includes(businessType)) {
+    const workspace =
+      businessType === 'MANUFACTURER'
+        ? 'MANUFACTURER'
+        : businessType === 'DISTRIBUTOR'
+          ? 'DISTRIBUTOR'
+          : 'SELLER';
+    return {
+      platformRole,
+      businessType,
+      portal: 'SELLER',
+      workspace,
+      route: '/dashboard/seller'
+    };
+  }
+
+  return {
+    platformRole,
+    businessType: businessType || 'RETAILER',
+    portal: 'BUYER',
+    workspace: 'BUYER',
+    route: '/dashboard/buyer'
+  };
+}
+
 export const ROLE_PERMISSIONS = {
   // Administrative Roles
   SUPER_ADMIN: ['*'],

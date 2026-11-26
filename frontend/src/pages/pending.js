@@ -5,9 +5,10 @@
 
 import { navigate } from '../router.js';
 import { api } from '../api.js';
-import { store, setState, persistUser } from '../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity } from '../store.js';
 import { showToast } from '../components/toast.js';
 import { esc, fmtDate } from '../utils/sanitize.js';
+import { isAdminRole, resolvePortalDestination } from '../utils/portalResolver.js';
 
 const STATUS_META = {
   PENDING_VERIFICATION: {
@@ -37,27 +38,57 @@ const STATUS_META = {
 };
 
 export default async function renderPending(container) {
+  const expectedApplicant =
+    store.user && store.user.id && !isAdminRole(store.user.role)
+      ? { ...store.user }
+      : null;
+
+  let sessionConflict = null;
+
   // Refresh latest status from backend if not in demo mode
   if (!store.demoMode) {
     try {
       const fresh = await api.me();
-      persistUser(fresh);
-      setState({ user: fresh, sessionChecked: true });
-      if (fresh.status === 'ACTIVE') {
-        showToast('Your business has been approved! Entering dashboard…', 'success');
-        navigate('/dashboard', true);
+      // CRITICAL SESSION ISOLATION: If another account (e.g., Super Admin in Tab 2)
+      // replaced the browser's shared HttpOnly session cookie, NEVER morph this
+      // applicant tab into that account or redirect into Super Admin Portal.
+      if (expectedApplicant && fresh.id !== expectedApplicant.id) {
+        sessionConflict = {
+          activeEmail: fresh.email,
+          activeRole: fresh.role,
+          applicantEmail: expectedApplicant.email
+        };
+      } else {
+        persistUser(fresh);
+        setState({ user: fresh, sessionChecked: true, demoMode: false });
+        const dest = resolvePortalDestination(fresh);
+        if (fresh.status === 'ACTIVE') {
+          showToast('Your business has been approved! Entering your portal…', 'success');
+          navigate(dest.route, true);
+          return;
+        }
+        if (fresh.status === 'REJECTED' || fresh.status === 'SUSPENDED') {
+          navigate(dest.route, true);
+          return;
+        }
+      }
+    } catch (err) {
+      if (err?.status === 401 && !expectedApplicant) {
+        persistUser(null);
+        setState({ user: null, sessionChecked: true, demoMode: false });
+        navigate('/login', true);
         return;
       }
-    } catch {}
+    }
   }
 
-  const user = store.user || {};
+  const user = sessionConflict ? expectedApplicant : (store.user || {});
   const meta = STATUS_META[user.status] || STATUS_META.PENDING_VERIFICATION;
   const bizName = user.organization?.name || user.businessProfile?.businessName || user.fullName || 'Your Business';
   const ver = user.businessProfile?.verification || null;
 
   let docs = [];
-  if (!store.demoMode && user.organization?.id) {
+  if (!store.demoMode && !sessionConflict && user.organization?.id) {
     try {
       const res = await api.getOrgDocuments();
       docs = res.documents || [];
@@ -77,6 +108,23 @@ export default async function renderPending(container) {
 
         <h1 style="font-size:var(--text-2xl);font-weight:900;margin-bottom:8px;">${esc(meta.title)}</h1>
         <p style="color:var(--color-text-muted);font-size:var(--text-sm);line-height:1.6;margin-bottom:20px;">${esc(meta.desc)}</p>
+
+        ${sessionConflict ? `
+          <div class="alert alert-warning" style="margin-bottom:18px;text-align:left;" role="alert">
+            <span>🔒</span>
+            <div>
+              <strong>Different Browser Session Detected</strong>
+              <div style="margin-top:4px;">
+                This browser is currently authenticated as <strong>${esc(sessionConflict.activeEmail)}</strong> (${esc(String(sessionConflict.activeRole || '').replace(/_/g, ' '))}) from another tab.
+                To keep sessions isolated, your applicant view for <strong>${esc(sessionConflict.applicantEmail)}</strong> was not redirected.
+                Sign in with your applicant credentials below (or use a separate browser window/profile to keep both sessions active).
+              </div>
+              <div style="margin-top:10px;">
+                <button id="btn-pending-relogin" class="btn btn-primary btn-sm">Sign In as Applicant →</button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
 
         ${ver?.reviewerNotes ? `
           <div class="alert alert-warning" style="margin-bottom:18px;text-align:left;">
@@ -164,8 +212,16 @@ export default async function renderPending(container) {
     renderPending(container);
   });
 
+  container.querySelector('#btn-pending-relogin')?.addEventListener('click', () => {
+    const emailParam = user.email ? `&email=${encodeURIComponent(user.email)}` : '';
+    navigate(`/login?switch=1${emailParam}`);
+  });
+
   container.querySelector('#btn-pending-signout')?.addEventListener('click', async () => {
-    try { await api.logout(); } catch {}
+    if (!sessionConflict) {
+      try { await api.logout(); } catch {}
+      broadcastSessionIdentity(null);
+    }
     persistUser(null);
     setState({ user: null, demoMode: false });
     navigate('/');

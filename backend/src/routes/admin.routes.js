@@ -1,7 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db.js';
-import { ADMIN_ROLES } from '../config/permissions.js';
+import { ADMIN_ROLES, isAdminRole, hasPlatformPermission } from '../config/permissions.js';
 import { requireAuth, requireAdmin, requirePermission } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { hashPassword } from '../auth/authService.js';
@@ -198,37 +198,61 @@ async function handleVerificationDecision(req, res, { nextStatus, actionName, no
     const { notes, riskFlags } = req.body || {};
     const verification = await prisma.businessVerification.findUnique({
       where: { id: req.params.id },
-      include: { business: true }
+      include: {
+        business: {
+          include: {
+            user: { select: { id: true, email: true, role: true, status: true } }
+          }
+        }
+      }
     });
-    if (!verification) return res.status(404).json({ error: 'Verification record not found.' });
+    if (!verification || !verification.business || !verification.business.user) {
+      return res.status(404).json({ error: 'Verification record not found.' });
+    }
 
+    const applicant = verification.business.user;
+    if (applicant.id === req.user.id) {
+      return res.status(403).json({ error: 'Administrators cannot review or approve their own verification request.' });
+    }
+    if (isAdminRole(applicant.role)) {
+      return res.status(403).json({ error: 'Administrative accounts cannot be modified through business verification approval.' });
+    }
+
+    const previousStatus = verification.status;
+    const reviewedAt = new Date();
     const prevHistory = Array.isArray(verification.history) ? verification.history : [];
     const newHistory = [
       ...prevHistory,
       {
         action: actionName,
+        decision: nextStatus,
+        previousStatus,
         status: nextStatus,
+        applicantUserId: applicant.id,
+        organizationId: verification.business.organizationId || null,
         reviewerId: req.user.id,
         reviewerEmail: req.user.email,
         notes: notes || '',
-        at: new Date().toISOString()
+        at: reviewedAt.toISOString()
       }
     ];
 
+    // Atomic update strictly scoped to the target applicant's verification status.
+    // NEVER modifies applicant User.role, Organization.businessType, Organization.portalType, or admin session.
     const txOps = [
       prisma.businessVerification.update({
-        where: { id: req.params.id },
+        where: { id: verification.id },
         data: {
           status: nextStatus,
           reviewerId: req.user.id,
           reviewerNotes: notes || null,
           riskFlags: riskFlags !== undefined ? riskFlags : verification.riskFlags,
           history: newHistory,
-          reviewedAt: new Date()
+          reviewedAt
         }
       }),
       prisma.user.update({
-        where: { id: verification.business.userId },
+        where: { id: applicant.id },
         data: { status: nextStatus }
       })
     ];
@@ -267,20 +291,44 @@ async function handleVerificationDecision(req, res, { nextStatus, actionName, no
       organizationId: verification.business.organizationId || null,
       action: actionName,
       targetEntity: 'BusinessVerification',
-      targetId: req.params.id,
-      details: { businessName: verification.business.businessName, notes: notes || '', nextStatus }
+      targetId: verification.id,
+      details: {
+        applicantUserId: applicant.id,
+        applicantEmail: applicant.email,
+        applicantRole: applicant.role,
+        applicantBusinessType: verification.business.businessType || applicant.role,
+        organizationId: verification.business.organizationId || null,
+        businessName: verification.business.businessName,
+        previousStatus,
+        newStatus: nextStatus,
+        decision: actionName,
+        notes: notes || '',
+        reviewedAt: reviewedAt.toISOString()
+      }
     });
 
     await prisma.notification.create({
       data: {
-        userId: verification.business.userId,
+        userId: applicant.id,
         category: 'VERIFICATION',
         title: notifTitle,
         body: notifBody(notes)
       }
     }).catch(() => {});
 
-    res.json({ ok: true, status: nextStatus });
+    res.json({
+      ok: true,
+      verificationId: verification.id,
+      previousStatus,
+      status: nextStatus,
+      applicant: {
+        userId: applicant.id,
+        role: applicant.role,
+        businessType: verification.business.businessType || applicant.role,
+        organizationId: verification.business.organizationId || null,
+        status: nextStatus
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Verification action failed.' });
   }
@@ -323,6 +371,63 @@ router.post('/verifications/:id/hold', requirePermission('HOLD_KYC'), (req, res)
   })
 );
 
+// Unified verification decision alias (accepts verificationId OR businessProfileId)
+router.post('/verifications/:id/decision', async (req, res) => {
+  const decision = String(req.body?.decision || '').toUpperCase();
+  const map = {
+    ACTIVE: {
+      perm: 'APPROVE_KYC',
+      opts: {
+        nextStatus: 'ACTIVE',
+        actionName: 'APPROVE_KYC',
+        notifTitle: 'Business Verified ✓',
+        notifBody: () => 'Your business verification has been approved. Your portal is now active.',
+        verifyFlags: true
+      }
+    },
+    REJECTED: {
+      perm: 'REJECT_KYC',
+      opts: {
+        nextStatus: 'REJECTED',
+        actionName: 'REJECT_KYC',
+        notifTitle: 'Verification Not Approved',
+        notifBody: (notes) => `Your business verification was rejected. Reason: ${notes || 'Please contact platform support.'}`
+      }
+    },
+    NEEDS_INFO: {
+      perm: 'REQUEST_DOCS',
+      opts: {
+        nextStatus: 'NEEDS_INFO',
+        actionName: 'REQUEST_ADDITIONAL_DOCS',
+        notifTitle: 'Additional Verification Documents Requested',
+        notifBody: (notes) => `Our verification team requested more details: ${notes || 'Please upload supporting registration documents.'}`
+      }
+    },
+    ON_HOLD: {
+      perm: 'HOLD_KYC',
+      opts: {
+        nextStatus: 'ON_HOLD',
+        actionName: 'HOLD_KYC',
+        notifTitle: 'Verification Placed On Hold',
+        notifBody: (notes) => `Your verification review is temporarily on hold. Notes: ${notes || 'Under compliance review.'}`
+      }
+    }
+  };
+
+  const entry = map[decision];
+  if (!entry) return res.status(400).json({ error: 'Invalid verification decision.' });
+  if (!hasPlatformPermission(req.user.role, entry.perm)) {
+    return res.status(403).json({ error: 'Insufficient role permissions.' });
+  }
+
+  const byId = await prisma.businessVerification.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!byId) {
+    const byBiz = await prisma.businessVerification.findUnique({ where: { businessId: req.params.id }, select: { id: true } });
+    if (byBiz) req.params.id = byBiz.id;
+  }
+  return handleVerificationDecision(req, res, entry.opts);
+});
+
 // ── AI Health & Usage Monitoring ──────────────────────────────────────────────
 router.get('/ai-usage', requirePermission('VIEW_ADMIN'), async (_req, res) => {
   try {
@@ -342,7 +447,7 @@ router.get('/ai-usage', requirePermission('VIEW_ADMIN'), async (_req, res) => {
 
     res.json({
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
       totalRequests: totals._count.id,
       failedRequests: failedCount,
       promptTokens: totals._sum.promptTokens || 0,

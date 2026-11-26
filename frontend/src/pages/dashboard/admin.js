@@ -3,7 +3,7 @@
  * Live data from /api/admin/*. Demo data is used ONLY when store.demoMode is true.
  */
 
-import { store, setState, persistUser } from '../../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity } from '../../store.js';
 import { api, demoData } from '../../api.js';
 import { renderSidebar } from '../../components/sidebar.js';
 import { showToast } from '../../components/toast.js';
@@ -539,7 +539,8 @@ function updateNavActive(tab) {
 async function handleLogout() {
   try { await api.logout(); } catch {}
   persistUser(null);
-  setState({ user: null });
+  broadcastSessionIdentity(null);
+  setState({ user: null, demoMode: false });
   navigate('/');
 }
 

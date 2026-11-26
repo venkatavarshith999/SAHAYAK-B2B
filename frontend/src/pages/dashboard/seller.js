@@ -4,7 +4,7 @@
  * Dynamically enables Manufacturer Factory & Production QC workspace when businessType === 'MANUFACTURER'.
  */
 
-import { store, setState, persistUser } from '../../store.js';
+import { store, setState, persistUser, broadcastSessionIdentity } from '../../store.js';
 import { api } from '../../api.js';
 import { renderSidebar } from '../../components/sidebar.js';
 import { AICopilot } from '../../components/ai-copilot.js';
@@ -126,16 +126,27 @@ async function overviewTab() {
   const d = await api.getSellerOverview();
   const s = d.stats;
   const isMfg = d.businessType === 'MANUFACTURER';
+  const isDist = d.businessType === 'DISTRIBUTOR';
+  const workspaceBadge = isMfg
+    ? 'MANUFACTURER WORKSPACE · SELLER PORTAL'
+    : isDist
+      ? 'DISTRIBUTOR WORKSPACE · SELLER PORTAL'
+      : `${d.businessType} · SELLER PORTAL`;
+  const workspaceSubtitle = isMfg
+    ? 'Manage factory production orders, QC inspections, product catalogue, and your workforce.'
+    : isDist
+      ? 'Manage regional distribution inventory, wholesale catalogues, supplier partnerships, and your team.'
+      : 'Manage bulk product catalogue, stock tiers, branches, and your team.';
 
   return `
     <div class="stagger-children" style="display:flex;flex-direction:column;gap:20px;">
       <div class="card-soft p-6" style="background:var(--grad-soft);border:1px solid var(--color-brand-200,#ddd6fe);">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div>
-            <span class="badge badge-brand">${esc(d.businessType)} · SELLER PORTAL</span>
+            <span class="badge badge-brand">${esc(workspaceBadge)}</span>
             <h1 style="font-size:var(--text-2xl);font-weight:900;margin-top:8px;">${esc(d.organizationName)}</h1>
             <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-top:4px;">
-              ${isMfg ? 'Manage factory production orders, QC inspections, product catalogue, and your workforce.' : 'Manage bulk product catalogue, stock tiers, branches, and your team.'}
+              ${esc(workspaceSubtitle)}
             </p>
           </div>
           <button class="btn btn-primary btn-sm" onclick="window.__sidebarNav('catalogue')">+ Manage Catalogue</button>
@@ -336,6 +347,7 @@ function updateNavActive(tab) {
 async function handleLogout() {
   try { await api.logout(); } catch {}
   persistUser(null);
+  broadcastSessionIdentity(null);
   setState({ user: null, demoMode: false });
   navigate('/');
 }

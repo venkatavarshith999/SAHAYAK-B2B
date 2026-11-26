@@ -6,7 +6,7 @@
 import { navigate } from '../router.js';
 import { api } from '../api.js';
 import { showToast } from '../components/toast.js';
-import { setState, persistUser } from '../store.js';
+import { setState, persistUser, broadcastSessionIdentity } from '../store.js';
 
 const CATEGORIES = [
   'Textiles & Garments', 'FMCG & Consumer Goods', 'Electronics & Electricals',
@@ -354,6 +354,7 @@ async function handleRegister(e, config, visibleFields = config.fields, isGoogle
       : await api.register(formData);
     const result = res.user || res;
     persistUser(result);
+    broadcastSessionIdentity(result);
     setState({ user: result, demoMode: false, sessionChecked: true });
 
     // Optional supporting verification document upload right after registration
